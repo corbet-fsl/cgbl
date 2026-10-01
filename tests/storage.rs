@@ -154,23 +154,53 @@ async fn unrelated_pools_both_commit_but_same_person_has_one_winner() {
 }
 
 async fn bounded_expiry_selects_the_oldest_real_rows(store: impl Store) {
-    let keys = [key("a-later"), key("z-earlier"), Key::new("person", "other")];
+    let keys = [
+        key("a-later"),
+        key("z-earlier"),
+        Key::new("person", "other"),
+    ];
     let observed = store.read(&keys).await.unwrap();
     assert!(matches!(
-        store.compare_exchange(&observed, vec![change("a-later", 200), change("a-later", 201)]).await,
+        store
+            .compare_exchange(
+                &observed,
+                vec![change("a-later", 200), change("a-later", 201)]
+            )
+            .await,
         Err(Error::Conflict)
     ));
     assert!(store.read(&keys).await.unwrap().records.is_empty());
-    store.compare_exchange(&observed, vec![
-        change("a-later", 200), change("z-earlier", 100),
-        Change { key: keys[2].clone(), record: Some(Record { value: vec![9], deadline: 1 }) },
-    ]).await.unwrap();
+    store
+        .compare_exchange(
+            &observed,
+            vec![
+                change("a-later", 200),
+                change("z-earlier", 100),
+                Change {
+                    key: keys[2].clone(),
+                    record: Some(Record {
+                        value: vec![9],
+                        deadline: 1,
+                    }),
+                },
+            ],
+        )
+        .await
+        .unwrap();
     assert!(store.expired(300, 0).await.unwrap().records.is_empty());
     let oldest = store.expired(300, 1).await.unwrap();
     assert_eq!(oldest.records.keys().collect::<Vec<_>>(), vec![&keys[1]]);
     assert_eq!(oldest.revisions.len(), 1);
     assert!(store.expired(100, 10).await.unwrap().records.is_empty());
-    assert_eq!(store.list("challenge", "a-later", 10).await.unwrap().records.len(), 1);
+    assert_eq!(
+        store
+            .list("challenge", "a-later", 10)
+            .await
+            .unwrap()
+            .records
+            .len(),
+        1
+    );
 }
 
 #[tokio::test]
@@ -191,26 +221,108 @@ async fn actual_imported_row_types_and_revision_limits_fail_closed() {
     let dir = tempfile::tempdir().unwrap();
     let url = format!("file://{}", dir.path().join("import.db").display());
     let db = Db::open(Config::new(url, "")).await.unwrap();
-    let schema = SCHEMA.replace("CHECK(revision > 0)", "").replace("CHECK(deadline >= 0)", "");
-    db.migrate(&[Migration::new(1, "import", &schema)]).await.unwrap();
+    let schema = SCHEMA
+        .replace("CHECK(revision > 0)", "")
+        .replace("CHECK(deadline >= 0)", "");
+    db.migrate(&[Migration::new(1, "import", &schema)])
+        .await
+        .unwrap();
     let store = LibsqlStore::new(&db, "global").unwrap();
     let initial = store.read(&[key("bad")]).await.unwrap();
-    store.compare_exchange(&initial, vec![change("bad", 10)]).await.unwrap();
+    store
+        .compare_exchange(&initial, vec![change("bad", 10)])
+        .await
+        .unwrap();
     let raw = db.community("global").unwrap();
     for (revision, value, deadline) in [
-        (crlt::Value::Text("wrong".into()), crlt::Value::Blob(vec![1]), crlt::Value::Integer(10)),
-        (crlt::Value::Integer(0), crlt::Value::Blob(vec![1]), crlt::Value::Integer(10)),
-        (crlt::Value::Integer(1), crlt::Value::Integer(9), crlt::Value::Integer(10)),
-        (crlt::Value::Integer(1), crlt::Value::Blob(vec![1]), crlt::Value::Text("wrong".into())),
-        (crlt::Value::Integer(1), crlt::Value::Blob(vec![1]), crlt::Value::Integer(-1)),
+        (
+            crlt::Value::Text("wrong".into()),
+            crlt::Value::Blob(vec![1]),
+            crlt::Value::Integer(10),
+        ),
+        (
+            crlt::Value::Integer(0),
+            crlt::Value::Blob(vec![1]),
+            crlt::Value::Integer(10),
+        ),
+        (
+            crlt::Value::Integer(1),
+            crlt::Value::Integer(9),
+            crlt::Value::Integer(10),
+        ),
+        (
+            crlt::Value::Integer(1),
+            crlt::Value::Blob(vec![1]),
+            crlt::Value::Text("wrong".into()),
+        ),
+        (
+            crlt::Value::Integer(1),
+            crlt::Value::Blob(vec![1]),
+            crlt::Value::Integer(-1),
+        ),
     ] {
         raw.execute("UPDATE cglb_record SET revision=?1, value=?2, deadline=?3 WHERE bucket='challenge' AND entry_key='bad'", crlt::params![revision, value, deadline]).await.unwrap();
-        assert!(matches!(store.read(&[key("bad")]).await, Err(Error::Storage)));
-        assert!(matches!(store.list("challenge", "", 10).await, Err(Error::Storage)));
+        assert!(matches!(
+            store.read(&[key("bad")]).await,
+            Err(Error::Storage)
+        ));
+        assert!(matches!(
+            store.list("challenge", "", 10).await,
+            Err(Error::Storage)
+        ));
     }
     raw.execute("UPDATE cglb_record SET revision=?1, value=?2, deadline=10 WHERE bucket='challenge' AND entry_key='bad'", crlt::params![i64::MAX, vec![1u8]]).await.unwrap();
     let maximum = store.read(&[key("bad")]).await.unwrap();
-    assert!(matches!(store.compare_exchange(&maximum, vec![change("bad", 11)]).await, Err(Error::Exhausted)));
-    assert_eq!(store.read(&[key("bad")]).await.unwrap().revisions[&key("bad")], i64::MAX);
-    assert!(matches!(store.expired(u64::MAX, 1).await, Err(Error::InvalidTime)));
+    assert!(matches!(
+        store
+            .compare_exchange(&maximum, vec![change("bad", 11)])
+            .await,
+        Err(Error::Exhausted)
+    ));
+    assert_eq!(
+        store.read(&[key("bad")]).await.unwrap().revisions[&key("bad")],
+        i64::MAX
+    );
+    assert!(matches!(
+        store.expired(u64::MAX, 1).await,
+        Err(Error::InvalidTime)
+    ));
+}
+
+#[tokio::test]
+async fn real_schema_loss_refuses_plans_reads_and_observed_updates() {
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("file://{}", dir.path().join("missing-table.db").display());
+    let db = database(&url).await;
+    let store = LibsqlStore::new(&db, "global").unwrap();
+    let observed = store.read(&[key("a")]).await.unwrap();
+    db.migrate(&[
+        Migration::new(1, "global", SCHEMA),
+        Migration::new(2, "external-loss", "DROP TABLE cglb_record"),
+    ]).await.unwrap();
+    assert!(matches!(store.check_query_plans().await, Err(Error::Storage)));
+    assert!(matches!(store.read(&[key("a")]).await, Err(Error::Storage)));
+    assert!(matches!(store.list("challenge", "", 1).await, Err(Error::Storage)));
+    assert!(matches!(store.compare_exchange(&observed, vec![change("a", 10)]).await, Err(Error::Storage)));
+}
+
+#[tokio::test]
+async fn a_real_second_insert_refusal_rolls_back_the_first_row() {
+    let dir = tempfile::tempdir().unwrap();
+    let url = format!("file://{}", dir.path().join("refused-batch.db").display());
+    let db = Db::open(Config::new(url, "")).await.unwrap();
+    let schema = SCHEMA.replace("entry_key TEXT NOT NULL", "entry_key TEXT NOT NULL CHECK(entry_key <> 'blocked')");
+    db.migrate(&[Migration::new(1, "import", &schema)]).await.unwrap();
+    let store = LibsqlStore::new(&db, "global").unwrap();
+    let observed = store.read(&[key("first"), key("blocked")]).await.unwrap();
+    assert!(matches!(store.compare_exchange(&observed, vec![change("first", 10), change("blocked", 10)]).await, Err(Error::Storage)));
+    let unchanged = store.read(&[key("first"), key("blocked")]).await.unwrap();
+    assert!(unchanged.records.is_empty());
+    assert_eq!(unchanged.revisions, observed.revisions);
+    store.compare_exchange(&observed, vec![change("first", 11)]).await.unwrap();
+    let genuine = store.read(&[key("first")]).await.unwrap();
+    db.community("global").unwrap().execute(
+        "UPDATE cglb_record SET revision='corrupt' WHERE bucket='challenge' AND entry_key='first'", (),
+    ).await.unwrap();
+    assert!(matches!(store.compare_exchange(&genuine, vec![change("first", 12)]).await, Err(Error::Storage)));
 }
