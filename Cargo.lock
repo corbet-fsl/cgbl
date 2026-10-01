@@ -546,7 +546,7 @@ dependencies = [
 [[package]]
 name = "cbcn"
 version = "0.1.0"
-source = "git+https://github.com/corbet-foss/cbcn?branch=main#491481ee25a7467be3727b73d1335cbb46656985"
+source = "git+https://github.com/corbet-foss/cbcn?branch=main#53ed942cdc1439fcedbc9914cf6cc44f83020d29"
 dependencies = [
  "csgn",
  "serde",
@@ -595,6 +595,7 @@ dependencies = [
  "crlt",
  "csgn",
  "hmac 0.13.0",
+ "libsql",
  "rand 0.8.8",
  "serde",
  "serde_json",
@@ -932,7 +933,7 @@ dependencies = [
 [[package]]
 name = "crlt"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/crlt?branch=main#ad4aaaa8fee61dea4858b3ed6be496b67db7f856"
+source = "git+https://github.com/corbet-foss/crlt?branch=main#9569c591f35f028fbf802a02fc23c6cf5a35bdf6"
 dependencies = [
  "deadpool",
  "libsql",
@@ -1007,7 +1008,7 @@ dependencies = [
 [[package]]
 name = "csgn"
 version = "0.0.0"
-source = "git+https://github.com/corbet-foss/csgn?branch=main#96f946b89efd67d79f841259ee914a4f6f43dcd0"
+source = "git+https://github.com/corbet-foss/csgn?branch=main#fac7f49eeb4e4bb9b72de640b46e55d8fe99119c"
 dependencies = [
  "ciborium-ll",
  "coset",
