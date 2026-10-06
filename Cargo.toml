@@ -5,7 +5,7 @@ edition = "2024"
 rust-version = "1.88"
 description = "Global gates, uniqueness, suspension and blind passport issuance for cvld"
 license = "FSL-1.1-ALv2"
-repository = "https://git.corbet.ch/corbet-libs/cgbl"
+repository = "https://git.corbet.ch/corbet-libs/cgbl.git"
 readme = "README.md"
 publish = false
 include = ["Cargo.toml", "build.rs", "src/**", "docs/**", "README.md", "LICENSE.md"]
@@ -15,10 +15,10 @@ default = []
 development-gate = []
 
 [dependencies]
-cbcn = { git = "https://github.com/corbet-foss/cbcn", branch = "main" }
-cpsd = { git = "https://github.com/corbet-foss/cpsd", branch = "main", default-features = false, features = ["storage"] }
-crlt = { git = "https://github.com/corbet-foss/crlt", branch = "main" }
-csgn = { git = "https://github.com/corbet-foss/csgn", branch = "main", features = ["libsql"] }
+cbcn = { git = "https://git.corbet.ch/corbet-foss/cbcn.git", branch = "v01" }
+cpsd = { git = "https://git.corbet.ch/corbet-foss/cpsd.git", branch = "v01", default-features = false, features = ["storage"] }
+crlt = { git = "https://git.corbet.ch/corbet-foss/crlt.git", branch = "v01" }
+csgn = { git = "https://git.corbet.ch/corbet-foss/csgn.git", branch = "v01", features = ["libsql"] }
 hmac = "0.13"
 sha2 = "0.11"
 serde = { version = "1", features = ["derive"] }
