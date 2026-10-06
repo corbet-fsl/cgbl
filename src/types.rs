@@ -37,7 +37,7 @@ pub enum Mode {
     /// Reject every development gate and development gate policy.
     Production,
     /// Permit the opt-in synthetic gate in isolated development deployments.
-    #[cfg(all(feature = "development-gate", cglb_development))]
+    #[cfg(all(feature = "development-gate", cgbl_development))]
     Development,
 }
 /// One required gate and trusted provider in a signed global policy.

@@ -1,6 +1,6 @@
 //! Real cryptographic global-facade round trips and adversarial lifecycle tests.
-#![cfg(all(feature = "development-gate", cglb_development))]
-use cglb::{
+#![cfg(all(feature = "development-gate", cgbl_development))]
+use cgbl::{
     development::DevelopmentGate,
     storage::{LibsqlStore, MemoryStore, Store},
     *,
@@ -63,7 +63,7 @@ fn fingerprint_key(seed: u8) -> FingerprintKey {
 async fn signer<K: csgn::Store>(store: K, scope: &str) -> csgn::PersistentSigner<K> {
     csgn::PersistentSigner::create(
         store,
-        format!("cglb:{scope}"),
+        format!("cgbl:{scope}"),
         csgn::SecretKey::from_seed(&mut [2; 32]),
         0,
         30 * DAY,
@@ -91,7 +91,7 @@ fn policy(scope: &str, revision: u64, epoch: u64, shared_expiry: u64) -> Policy 
         shared_expiry,
         gates: vec![GatePolicy {
             gate: "development".into(),
-            provider: "cglb.test".into(),
+            provider: "cgbl.test".into(),
             uniqueness: true,
         }],
     }
@@ -694,7 +694,7 @@ async fn production_rejects_development_and_stored_key_changes() {
     ));
     let sign = csgn::PersistentSigner::open(
         keys.clone(),
-        "cglb:test",
+        "cgbl:test",
         csgn::SecretKey::from_seed(&mut [2; 32]),
         10,
     )
@@ -730,7 +730,7 @@ async fn production_rejects_development_and_stored_key_changes() {
     for (seed, hmac) in [(2, 9), (1, 8)] {
         let sign = csgn::PersistentSigner::open(
             keys.clone(),
-            "cglb:test",
+            "cgbl:test",
             csgn::SecretKey::from_seed(&mut [2; 32]),
             10,
         )
@@ -910,7 +910,7 @@ async fn actual_sqlite_write_refusals_bound_retries_and_preserve_atomic_batches(
             .unwrap();
         let raw_db = libsql::Builder::new_local(&path).build().await.unwrap();
         let raw = raw_db.connect().unwrap();
-        raw.execute_batch(&format!("CREATE TRIGGER refuse_write BEFORE INSERT ON cglb_record WHEN NEW.bucket = 'account' BEGIN SELECT RAISE({action}); END;")).await.unwrap();
+        raw.execute_batch(&format!("CREATE TRIGGER refuse_write BEFORE INSERT ON cgbl_record WHEN NEW.bucket = 'account' BEGIN SELECT RAISE({action}); END;")).await.unwrap();
         let error = global
             .run_gate(
                 &DevelopmentGate::new(COHORT),
@@ -954,7 +954,7 @@ async fn actual_sqlite_write_refusals_bound_retries_and_preserve_atomic_batches(
             )
             .await
             .unwrap();
-        raw.execute_batch(&format!("CREATE TRIGGER refuse_write BEFORE INSERT ON cglb_record WHEN NEW.bucket = 'challenge' BEGIN SELECT RAISE({action}); END;")).await.unwrap();
+        raw.execute_batch(&format!("CREATE TRIGGER refuse_write BEFORE INSERT ON cgbl_record WHEN NEW.bucket = 'challenge' BEGIN SELECT RAISE({action}); END;")).await.unwrap();
         let mut rng = StdRng::seed_from_u64(71);
         let error = global
             .challenge(&mut rng, &session(&subject("member")), 100, 150)
@@ -1017,7 +1017,7 @@ async fn real_nonce_storage_side_effects_cannot_change_a_reserved_issuance() {
             .unwrap();
         let raw_db = libsql::Builder::new_local(&path).build().await.unwrap();
         let raw = raw_db.connect().unwrap();
-        raw.execute_batch(&format!("CREATE TRIGGER change_reservation AFTER INSERT ON cpsd_challenges BEGIN UPDATE cglb_record SET value = CAST(json_set(CAST(value AS TEXT), '$.{field}', {value}) AS BLOB), revision = revision + 1 WHERE community_id = 'test' AND bucket = '{bucket}' AND entry_key = '{entry}'; END;")).await.unwrap();
+        raw.execute_batch(&format!("CREATE TRIGGER change_reservation AFTER INSERT ON cpsd_challenges BEGIN UPDATE cgbl_record SET value = CAST(json_set(CAST(value AS TEXT), '$.{field}', {value}) AS BLOB), revision = revision + 1 WHERE community_id = 'test' AND bucket = '{bucket}' AND entry_key = '{entry}'; END;")).await.unwrap();
         let mut rng = StdRng::seed_from_u64(72);
         assert!(
             matches!(
@@ -1080,10 +1080,10 @@ async fn post_crypto_storage_failure_never_releases_an_uncommitted_passport() {
         let raw_db = libsql::Builder::new_local(&path).build().await.unwrap();
         let raw = raw_db.connect().unwrap();
         let trigger = if action == "owner-revision" {
-            "CREATE TRIGGER refuse_commit AFTER INSERT ON cpsd_issuer_tags BEGIN UPDATE cglb_record SET revision = revision + 1 WHERE community_id = 'test' AND bucket = 'account' AND entry_key = 'member'; END;".to_owned()
+            "CREATE TRIGGER refuse_commit AFTER INSERT ON cpsd_issuer_tags BEGIN UPDATE cgbl_record SET revision = revision + 1 WHERE community_id = 'test' AND bucket = 'account' AND entry_key = 'member'; END;".to_owned()
         } else {
             format!(
-                "CREATE TRIGGER refuse_commit BEFORE UPDATE ON cglb_record WHEN NEW.bucket = 'challenge' AND NEW.value IS NULL BEGIN SELECT RAISE({action}); END;"
+                "CREATE TRIGGER refuse_commit BEFORE UPDATE ON cgbl_record WHEN NEW.bucket = 'challenge' AND NEW.value IS NULL BEGIN SELECT RAISE({action}); END;"
             )
         };
         raw.execute_batch(&trigger).await.unwrap();
@@ -1130,7 +1130,7 @@ async fn status_publication_is_fenced_against_a_real_signing_transaction_side_ef
         .unwrap();
     let raw_db = libsql::Builder::new_local(&path).build().await.unwrap();
     let raw = raw_db.connect().unwrap();
-    raw.execute_batch("CREATE TRIGGER change_status AFTER UPDATE ON csgn_state BEGIN UPDATE cglb_record SET revision = revision + 1 WHERE community_id = 'test' AND bucket = 'meta' AND entry_key = 'state'; END;").await.unwrap();
+    raw.execute_batch("CREATE TRIGGER change_status AFTER UPDATE ON csgn_state BEGIN UPDATE cgbl_record SET revision = revision + 1 WHERE community_id = 'test' AND bucket = 'meta' AND entry_key = 'state'; END;").await.unwrap();
     assert!(matches!(
         global.signed_status(100, 2 * DAY).await,
         Err(Error::Conflict)
@@ -1185,7 +1185,7 @@ async fn durable_renewal_after_reopen_keeps_identity_and_rejects_new_secret() {
     let keys = csgn::LibsqlStore::new(db.community("global").unwrap());
     let sign = csgn::PersistentSigner::open(
         keys,
-        "cglb:global",
+        "cgbl:global",
         csgn::SecretKey::from_seed(&mut [2; 32]),
         101,
     )

@@ -1,1 +1,3 @@
-fn main() { let _ = cglb::development::DevelopmentGate::new(86400); }
+fn main() {
+    let _ = cgbl::development::DevelopmentGate::new(86400);
+}

@@ -14,13 +14,13 @@ impl FingerprintKey {
     }
     pub(crate) fn fingerprint(&self, scope: &str, gate: &str, value: &[u8]) -> String {
         hex(&self.digest(
-            b"cglb/uniqueness/v1",
+            b"cgbl/uniqueness/v1",
             &[scope.as_bytes(), gate.as_bytes(), value],
         ))
     }
     pub(crate) fn person_id(&self, scope: &str, subject: &crate::Subject) -> [u8; 32] {
         self.digest(
-            b"cglb/cpsd-person/v1",
+            b"cgbl/cpsd-person/v1",
             &[scope.as_bytes(), subject.as_str().as_bytes()],
         )
     }
@@ -33,7 +33,7 @@ impl FingerprintKey {
         check: &crate::CheckId,
     ) -> crate::CheckId {
         crate::CheckId(hex(&self.digest(
-            b"cglb/provider-check/v1",
+            b"cgbl/provider-check/v1",
             &[
                 scope.as_bytes(),
                 subject.as_str().as_bytes(),

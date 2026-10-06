@@ -188,20 +188,20 @@ impl Store for MemoryStore {
 /// New installations append this schema and the csgn/cpsd leaf schemas to their
 /// service-owned migration list. Existing installations need an explicit upgrade.
 pub const SCHEMA: &str = "
-CREATE TABLE cglb_record (
+CREATE TABLE cgbl_record (
  community_id TEXT NOT NULL, bucket TEXT NOT NULL, entry_key TEXT NOT NULL,
  revision INTEGER NOT NULL CHECK(revision > 0), value BLOB,
  deadline INTEGER NOT NULL CHECK(deadline >= 0),
  PRIMARY KEY(community_id,bucket,entry_key)
 ) WITHOUT ROWID;
-CREATE INDEX cglb_deadline ON cglb_record(community_id,bucket,deadline,entry_key);
+CREATE INDEX cgbl_deadline ON cgbl_record(community_id,bucket,deadline,entry_key);
 ";
 const GET: &str =
-    "SELECT revision, value, deadline FROM cglb_record WHERE bucket = ?1 AND entry_key = ?2";
-const LIST: &str = "SELECT entry_key, revision, value, deadline FROM cglb_record WHERE bucket = ?1 AND entry_key > ?2 AND value IS NOT NULL ORDER BY entry_key LIMIT ?3";
-const EXPIRED: &str = "SELECT entry_key, revision, value, deadline FROM cglb_record WHERE bucket = ?1 AND deadline < ?2 AND value IS NOT NULL ORDER BY deadline, entry_key LIMIT ?3";
-const INSERT: &str = "INSERT INTO cglb_record(bucket, entry_key, revision, value, deadline) VALUES (?1, ?2, ?3, ?4, ?5)";
-const UPDATE: &str = "UPDATE cglb_record SET revision = ?1, value = ?2, deadline = ?3 WHERE bucket = ?4 AND entry_key = ?5 AND revision = ?6";
+    "SELECT revision, value, deadline FROM cgbl_record WHERE bucket = ?1 AND entry_key = ?2";
+const LIST: &str = "SELECT entry_key, revision, value, deadline FROM cgbl_record WHERE bucket = ?1 AND entry_key > ?2 AND value IS NOT NULL ORDER BY entry_key LIMIT ?3";
+const EXPIRED: &str = "SELECT entry_key, revision, value, deadline FROM cgbl_record WHERE bucket = ?1 AND deadline < ?2 AND value IS NOT NULL ORDER BY deadline, entry_key LIMIT ?3";
+const INSERT: &str = "INSERT INTO cgbl_record(bucket, entry_key, revision, value, deadline) VALUES (?1, ?2, ?3, ?4, ?5)";
+const UPDATE: &str = "UPDATE cgbl_record SET revision = ?1, value = ?2, deadline = ?3 WHERE bucket = ?4 AND entry_key = ?5 AND revision = ?6";
 /// Durable per-row revisions over the service's crlt pool.
 #[derive(Clone)]
 pub struct LibsqlStore {

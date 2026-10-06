@@ -1,5 +1,5 @@
 //! Real per-row CAS, rollback, ABA, isolation and independent SQL-pool tests.
-use cglb::{Error, storage::*};
+use cgbl::{Error, storage::*};
 use crlt::{Config, Db, Migration};
 fn key(id: &str) -> Key {
     Key::new("challenge", id)
@@ -261,7 +261,7 @@ async fn actual_imported_row_types_and_revision_limits_fail_closed() {
             crlt::Value::Integer(-1),
         ),
     ] {
-        raw.execute("UPDATE cglb_record SET revision=?1, value=?2, deadline=?3 WHERE bucket='challenge' AND entry_key='bad'", crlt::params![revision, value, deadline]).await.unwrap();
+        raw.execute("UPDATE cgbl_record SET revision=?1, value=?2, deadline=?3 WHERE bucket='challenge' AND entry_key='bad'", crlt::params![revision, value, deadline]).await.unwrap();
         assert!(matches!(
             store.read(&[key("bad")]).await,
             Err(Error::Storage)
@@ -271,7 +271,7 @@ async fn actual_imported_row_types_and_revision_limits_fail_closed() {
             Err(Error::Storage)
         ));
     }
-    raw.execute("UPDATE cglb_record SET revision=?1, value=?2, deadline=10 WHERE bucket='challenge' AND entry_key='bad'", crlt::params![i64::MAX, vec![1u8]]).await.unwrap();
+    raw.execute("UPDATE cgbl_record SET revision=?1, value=?2, deadline=10 WHERE bucket='challenge' AND entry_key='bad'", crlt::params![i64::MAX, vec![1u8]]).await.unwrap();
     let maximum = store.read(&[key("bad")]).await.unwrap();
     assert!(matches!(
         store
@@ -311,7 +311,7 @@ async fn imported_unindexed_expiry_schema_is_rejected_by_the_actual_planner() {
     let scope = db.community("global").unwrap();
     let mut tx = scope.tx().await.unwrap();
     for index in 0..100 {
-        tx.execute("INSERT INTO cglb_record (bucket, entry_key, revision, value, deadline) VALUES ('challenge', ?1, 1, ?2, 10)", crlt::params![index.to_string(), vec![1u8]]).await.unwrap();
+        tx.execute("INSERT INTO cgbl_record (bucket, entry_key, revision, value, deadline) VALUES ('challenge', ?1, 1, ?2, 10)", crlt::params![index.to_string(), vec![1u8]]).await.unwrap();
     }
     tx.commit().await.unwrap();
     let raw_db = libsql::Builder::new_local(&path).build().await.unwrap();
@@ -343,7 +343,7 @@ async fn real_schema_loss_refuses_plans_reads_and_observed_updates() {
     let observed = store.read(&[key("a")]).await.unwrap();
     db.migrate(&[
         Migration::new(1, "global", SCHEMA),
-        Migration::new(2, "external-loss", "DROP TABLE cglb_record"),
+        Migration::new(2, "external-loss", "DROP TABLE cgbl_record"),
     ])
     .await
     .unwrap();
@@ -393,7 +393,7 @@ async fn a_real_second_insert_refusal_rolls_back_the_first_row() {
         .unwrap();
     let genuine = store.read(&[key("first")]).await.unwrap();
     db.community("global").unwrap().execute(
-        "UPDATE cglb_record SET revision='corrupt' WHERE bucket='challenge' AND entry_key='first'", (),
+        "UPDATE cgbl_record SET revision='corrupt' WHERE bucket='challenge' AND entry_key='first'", (),
     ).await.unwrap();
     assert!(matches!(
         store

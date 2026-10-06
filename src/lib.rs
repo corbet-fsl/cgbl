@@ -1,7 +1,9 @@
 //! Global gates, unique identities, suspension and blind passports for cvld.
 //! Native service facade; see the README and implemented contract for its trust boundary.
 #![forbid(unsafe_code)]
-#[cfg(all(feature = "development-gate", cglb_development))]
+#[cfg(test)]
+mod build_policy;
+#[cfg(all(feature = "development-gate", cgbl_development))]
 pub mod development;
 mod facade;
 mod fingerprint;
@@ -17,7 +19,7 @@ pub use types::*;
 /// Existing databases need an explicit identity-preserving upgrade; an old
 /// binding cannot be opened as version two and must never be silently reset.
 pub const SCHEMAS: [(&str, &str); 5] = [
-    ("cglb", storage::SCHEMA),
+    ("cgbl", storage::SCHEMA),
     ("csgn", csgn::SCHEMA),
     ("cpsd challenges", cpsd::storage::libsql::SCHEMA),
     ("cpsd continuity", cpsd::storage::libsql::ISSUANCE_SCHEMA),
@@ -29,7 +31,7 @@ pub const SCHEMAS: [(&str, &str); 5] = [
 
 /// Holder operations are deliberately not re-exported by this issuer facade.
 /// ```compile_fail
-/// use cglb::cpsd::HolderSecret;
+/// use cgbl::cpsd::HolderSecret;
 /// ```
 #[doc(hidden)]
 pub struct IssuerBoundary;

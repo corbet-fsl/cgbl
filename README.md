@@ -1,4 +1,4 @@
-# cglb
+# cgbl
 
 **Global facade of cvld: verifies a real, unique person once; global gates, uniqueness, suspension, passport issuance.**
 
@@ -58,10 +58,10 @@ Install the complete service migration history before opening adapters:
 
 ```rust,no_run
 use crlt::{Config, Db, Migration};
-use cglb::storage;
+use cgbl::storage;
 # async fn example(url: String, token: String) -> Result<(), Box<dyn std::error::Error>> {
 let db = Db::open(Config::new(url, token)).await?;
-let migrations: Vec<_> = cglb::SCHEMAS.iter().enumerate()
+let migrations: Vec<_> = cgbl::SCHEMAS.iter().enumerate()
     .map(|(i, (name, sql))| Migration::new(i as u32 + 1, name, sql)).collect();
 db.migrate(&migrations).await?;
 let identities = storage::LibsqlStore::new(&db, "global")?;

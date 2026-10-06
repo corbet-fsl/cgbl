@@ -7,7 +7,7 @@ fn independent_hmac_vector_and_domain_separation() {
     let fingerprint = key.fingerprint("global", "development", b"synthetic-a");
     assert_eq!(
         fingerprint,
-        "6070b5bdd7f8ab5ed68bbac5e08e4e43d3e5aa93a657824a7b9b44dca5de26e0"
+        "727c49b7a4dfdd6e5f8e70e1ca4473b3d1077954f59cfed7873ab8c3e4cf69f3"
     );
     assert_ne!(
         fingerprint,

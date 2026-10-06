@@ -1,11 +1,11 @@
 [package]
-name = "cglb"
+name = "cgbl"
 version = "0.0.0"
 edition = "2024"
 rust-version = "1.88"
 description = "Global gates, uniqueness, suspension and blind passport issuance for cvld"
 license = "FSL-1.1-ALv2"
-repository = "https://github.com/corbet-libs/cglb"
+repository = "https://git.corbet.ch/corbet-libs/cgbl"
 readme = "README.md"
 publish = false
 include = ["Cargo.toml", "build.rs", "src/**", "docs/**", "README.md", "LICENSE.md"]

@@ -62,7 +62,7 @@ pub struct Global<S, K, I> {
 }
 impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     /// Open or initialize key bindings. Existing stores reject a changed HMAC
-    /// key or BBS issuer. The signer must be named `cglb:<scope>`.
+    /// key or BBS issuer. The signer must be named `cgbl:<scope>`.
     pub async fn open(
         store: S,
         issuance: I,
@@ -94,7 +94,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             return Err(Error::Capacity);
         }
         if signer.key_ring().map_err(|_| Error::Signature)?.issuer()
-            != format!("cglb:{}", store.scope())
+            != format!("cgbl:{}", store.scope())
         {
             return Err(Error::KeyMismatch);
         }
@@ -113,7 +113,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             fingerprint_key_check: fingerprints.fingerprint(
                 store.scope(),
                 "",
-                b"cglb/key-check/v1",
+                b"cgbl/key-check/v1",
             ),
         };
         let read = store.read(&[meta("binding")]).await?;
@@ -190,7 +190,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
                 return Err(Error::Policy);
             }
             if self.mode == Mode::Production
-                && (gate.gate == "development" || gate.provider == "cglb.test")
+                && (gate.gate == "development" || gate.provider == "cgbl.test")
             {
                 return Err(Error::DevelopmentDisabled);
             }
@@ -236,7 +236,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         if self.mode == Mode::Production
             && (gate.development_only()
                 || gate.id() == "development"
-                || gate.provider() == "cglb.test")
+                || gate.provider() == "cgbl.test")
         {
             return Err(Error::DevelopmentDisabled);
         }
@@ -474,7 +474,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     }
     /// Delegate blind issuance, atomic nonce consumption and holder continuity
     /// to cpsd, then fence current person/policy state before releasing a response.
-    /// No issuer tag or holder continuity implementation exists in cglb.
+    /// No issuer tag or holder continuity implementation exists in cgbl.
     pub async fn issue<R: RngCore + CryptoRng>(
         &self,
         rng: &mut R,
@@ -758,7 +758,7 @@ impl Status {
         minimum_revision: u64,
         now: u64,
     ) -> Result<Self> {
-        if ring.issuer() != format!("cglb:{scope}") {
+        if ring.issuer() != format!("cgbl:{scope}") {
             return Err(Error::Signature);
         }
         let verified = ring
@@ -776,7 +776,7 @@ impl Status {
         Ok(value)
     }
     fn validate_publication(&self, issuer: &str) -> Result<()> {
-        if issuer != format!("cglb:{}", self.scope)
+        if issuer != format!("cgbl:{}", self.scope)
             || self.version != 2
             || self.purpose != "global-passport-status"
             || !self.shared_expiry.is_multiple_of(86_400)

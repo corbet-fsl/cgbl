@@ -48,7 +48,7 @@ is a diagnostic correction, not evidence that the remaining gaps are covered.
 ## Proposed invariant exceptions
 
 These are review proposals, not independent security acceptance. Run
-[36938685007](https://github.com/corbet-libs/cglb/actions/runs/36938685007),
+36938685007,
 head `1ed3789b427ff9877e05a45f610ca411be05fb74`, executed all 1,057
 production lines and 229 of 232 emitted branch arms. Ordinary native,
 all-feature, strict Clippy and release suites passed. The real cached-publication
@@ -75,7 +75,7 @@ Only these three native arms are proposed:
   the cache path. Tests exercise policy-version rollback, changed shared expiry,
   valid cache reuse, actual signer invalidation and concurrent storage changes.
 - `src/facade.rs:770`, block 0 arm 0: a scope mismatch is impossible after the two
-  preceding checks. The first requires `ring.issuer() == format!("cglb:{scope}")`;
+  preceding checks. The first requires `ring.issuer() == format!("cgbl:{scope}")`;
   `validate_publication` then requires that same issuer to equal the same literal
   prefix plus `value.scope`. Prefix concatenation is injective. The bound key-ring
   API returns an immutable issuer string and this code cannot change it. Epoch

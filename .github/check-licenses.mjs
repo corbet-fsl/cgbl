@@ -41,7 +41,7 @@ const allowed = new Set([
   "Zlib OR Apache-2.0 OR MIT"
 ]);
 const metadata = JSON.parse(readFileSync('dependency-metadata.json', 'utf8'));
-const rejected = metadata.packages.filter(p => !(p.name === "cglb" && p.license === "FSL-1.1-ALv2") && !allowed.has(p.license));
+const rejected = metadata.packages.filter(p => !(p.name === "cgbl" && p.license === "FSL-1.1-ALv2") && !allowed.has(p.license));
 for (const p of rejected) {
   console.error(`Unreviewed license: ${p.name} ${p.version}: ${p.license ?? 'missing'}`);
 }

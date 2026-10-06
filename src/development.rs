@@ -17,7 +17,7 @@ impl GlobalGate for DevelopmentGate {
         "development"
     }
     fn provider(&self) -> &str {
-        "cglb.test"
+        "cgbl.test"
     }
     fn development_only(&self) -> bool {
         true

@@ -1,6 +1,6 @@
-# cglb contract
+# cgbl contract
 
-cglb is cvld's separate global issuer. Its authenticated service owns global
+cgbl is cvld's separate global issuer. Its authenticated service owns global
 person IDs, session IDs, provider selection, authority trust, legal/self-ban
 permission, secrets, clocks and transport limits. Community pseudonyms, community
 policies and community databases never enter this facade. No login dates, raw
@@ -8,18 +8,18 @@ provider evidence, proof payloads or issued passports are stored.
 
 ## One owner per operation
 
-`Global<S,K,I>` composes a cglb store, csgn durable signer and cpsd IssuanceStore.
+`Global<S,K,I>` composes a cgbl store, csgn durable signer and cpsd IssuanceStore.
 `Session::authenticated` imports a stable opaque person and nonzero session ID
 from the service authentication layer; it is not a client-deserializable receipt.
 The facade checks eligibility and policy. cpsd alone generates/reserves issuance
 nonces, verifies blind issuance, atomically consumes the nonce and enforces both
-directions of permanent person/holder-tag continuity. cglb keeps no issuer tags,
+directions of permanent person/holder-tag continuity. cgbl keeps no issuer tags,
 implements no continuity check and exports only issuer protocol messages, never
 holder APIs. Wallet origin authentication and unsigned-request compile failures
 remain cpsd's responsibility; tests exercise real signed requests and wrong origins.
 
 The service appends `SCHEMAS` to its complete migration history for a NEW global
-database: cglb rows, csgn state, cpsd challenges, cpsd issuer tags and their unique
+database: cgbl rows, csgn state, cpsd challenges, cpsd issuer tags and their unique
 owner index. All SQL uses crlt with scope keys and index checks. A version-two
 binding refuses old layouts. Existing installations require an explicit upgrade
 preserving every burned fingerprint and moving holder bindings into cpsd; never
@@ -34,7 +34,7 @@ commits. The facade derives a stable provider idempotency key bound to scope,
 person, gate and provider. A provider leaf MUST use the provider's idempotent API:
 repeated delivery must return the same outcome without charging again, and reuse
 with a different input must be refused. Providers without this guarantee cannot
-implement the paid gate contract. cglb does not claim exactly-once network delivery.
+implement the paid gate contract. cgbl does not claim exactly-once network delivery.
 
 Only the latest check ID/input commitment accompanies each current gate result;
 there is no check history. Exact completed retries use the retained result.
@@ -43,7 +43,7 @@ then retries only the atomic storage commit. It never calls the provider again
 because of a CAS conflict. Unrelated people cannot invalidate the check.
 Cancellation before persistence is retried through the same provider key.
 
-Each cglb record has an independent increasing revision. CAS validates only the
+Each cgbl record has an independent increasing revision. CAS validates only the
 observed keys, including missing keys; every changed key must have been observed.
 Deletion retains the key revision to prevent ABA. Read-only operations take no
 write transaction. Composite indexes cover lookups, pages and challenge expiry.
@@ -100,7 +100,7 @@ bounded lifetime; this is not an offline revocation accumulator.
 Public `Status` is a version-two SettingsSnapshot with exact purpose
 `global-passport-status`, effective epoch, authority revision, shared cohort expiry
 and BBS public key. It contains no person or revocation list. Verification requires
-the authenticated `cglb:<scope>` ring and consumer-maintained epoch/revision floors.
+the authenticated `cgbl:<scope>` ring and consumer-maintained epoch/revision floors.
 The private revocation list stays administrative. Status publication rechecks its
 observed state after signing. One csgn writer owns COSE signing/key rotation.
 

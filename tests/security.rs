@@ -1,5 +1,5 @@
 //! Production-mode policy, provider-idempotency and challenge-capacity regressions.
-use cglb::{
+use cgbl::{
     storage::{MemoryStore, Store},
     *,
 };
@@ -42,11 +42,11 @@ async fn open(
 ) -> Facade {
     let key = csgn::SecretKey::from_seed(&mut [2; 32]);
     let signer = if reopen {
-        csgn::PersistentSigner::open(keys, "cglb:global", key, 0)
+        csgn::PersistentSigner::open(keys, "cgbl:global", key, 0)
             .await
             .unwrap()
     } else {
-        csgn::PersistentSigner::create(keys, "cglb:global", key, 0, 30 * DAY)
+        csgn::PersistentSigner::create(keys, "cgbl:global", key, 0, 30 * DAY)
             .await
             .unwrap()
     };
@@ -375,7 +375,7 @@ async fn beacon_refuses_signed_documents_with_invalid_owner_payloads() {
     let original = Status::verify(&bytes, global.key_ring().unwrap(), "global", 1, 1, 100).unwrap();
     let mut signer = csgn::PersistentSigner::create(
         csgn::MemoryStore::default(),
-        "cglb:global",
+        "cgbl:global",
         csgn::SecretKey::from_seed(&mut [44; 32]),
         0,
         30 * DAY,
@@ -451,9 +451,9 @@ async fn open_refuses_cross_scope_keys_unaligned_signers_and_invalid_limits() {
         "capacity",
     ] {
         let signing_scope = if case == "issuer" {
-            "cglb:other"
+            "cgbl:other"
         } else {
-            "cglb:global"
+            "cgbl:global"
         };
         let signer = csgn::PersistentSigner::create(
             csgn::MemoryStore::default(),
@@ -548,7 +548,7 @@ async fn policy_refusals_authenticate_each_invalid_field_before_state_changes() 
             "empty" => invalid.gates.clear(),
             "many" => invalid.gates = vec![invalid.gates[0].clone(); cpsd::MAX_GATES + 1],
             "first-epoch" => invalid.epoch = 2,
-            _ => invalid.gates[0].provider = "cglb.test".into(),
+            _ => invalid.gates[0].provider = "cgbl.test".into(),
         }
         let bytes = authority
             .sign(
@@ -774,7 +774,7 @@ async fn open_refuses_a_real_signer_invalidated_by_a_competing_writer() {
     let keys = csgn::MemoryStore::default();
     let mut stale = csgn::PersistentSigner::create(
         keys.clone(),
-        "cglb:global",
+        "cgbl:global",
         csgn::SecretKey::from_seed(&mut [2; 32]),
         0,
         30 * DAY,
@@ -783,7 +783,7 @@ async fn open_refuses_a_real_signer_invalidated_by_a_competing_writer() {
     .unwrap();
     let mut winner = csgn::PersistentSigner::open(
         keys,
-        "cglb:global",
+        "cgbl:global",
         csgn::SecretKey::from_seed(&mut [2; 32]),
         0,
     )
@@ -838,7 +838,7 @@ async fn reserved_provider_names_and_mismatched_replayed_receipts_refuse() {
     let (global, store, _, _) = make().await;
     for gate in [
         NamedProvider("development", "sms"),
-        NamedProvider("phone", "cglb.test"),
+        NamedProvider("phone", "cgbl.test"),
     ] {
         assert!(matches!(
             global
