@@ -66,6 +66,20 @@ python3 --version
 cargo-deny --version
 rustup run nightly rustc -vV
 rustup run nightly cargo llvm-cov --version
+# Preserve completed measurement artifacts even when the coverage gate fails.
+# Crow removes its source checkout after reporting the verdict.
+retain_coverage() {
+  local status=$?
+  trap - EXIT
+  for report in coverage.json coverage.lcov coverage.txt; do
+    if [[ -f "$report" && ! -L "$report" ]]; then
+      mkdir -p "$ARTIFACT_ROOT/$CI_COMMIT_SHA" || status=1
+      cp -- "$report" "$ARTIFACT_ROOT/$CI_COMMIT_SHA/$report" || status=1
+    fi
+  done
+  exit "$status"
+}
+trap retain_coverage EXIT
 "$CCID_BIN" cached --repo "$PWD" --check verify
 test -s ".ccid/results/verify.jsonl"
 "$CCID_BIN" check --repo "$PWD" --check advisories
