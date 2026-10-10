@@ -10,6 +10,48 @@ use crate::{
 };
 use zeroize::Zeroizing;
 
+mod authorization;
+pub use authorization::ContactAuthorization;
+
+/// The actual leaf identity scheme whose stable comparison key is committed.
+#[derive(Clone, Copy)]
+pub enum ContactDomain {
+    Phone,
+    Mailbox,
+}
+impl ContactDomain {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Phone => "cphn.identity.v1:phone.e164",
+            Self::Mailbox => "cmbx.identity.v1:mailbox.address",
+        }
+    }
+    pub fn gate(self) -> &'static str {
+        match self {
+            Self::Phone => "cphn",
+            Self::Mailbox => "cmbx",
+        }
+    }
+}
+/// Reuse the existing maintained HMAC engine for an opaque key commitment.
+/// It binds the exact key, configured comparison scope and fixed leaf identity
+/// domain. Pass only a temporary key copy: construction wipes this input.
+/// Caller-owned atomic persistence must refuse changed commitments, including
+/// conservative migration when older comparison identities lack a commitment.
+pub fn comparison_key_binding(
+    scope: &str,
+    domain: ContactDomain,
+    key_copy: &mut [u8; 32],
+) -> Result<String> {
+    let key = FingerprintKey::from_bytes(key_copy);
+    crate::validate_id(scope)?;
+    Ok(key.fingerprint(
+        scope,
+        "contact-comparison-key-binding",
+        domain.as_str().as_bytes(),
+    ))
+}
+
 /// Sealed host context derived by [`crate::Global::contact_binding`] before a
 /// leaf ceremony. Never construct expected bindings from a returned fact.
 ///

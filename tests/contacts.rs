@@ -26,6 +26,74 @@ fn subject(name: &str) -> Subject {
 fn check(seed: u64) -> CheckId {
     CheckId::generate(&mut StdRng::seed_from_u64(seed))
 }
+
+#[tokio::test]
+async fn self_ban_preserves_genuine_verified_gate_facts_and_burned_comparison_identities() {
+    let (global, store) = service("global", "twilio").await;
+    let alice = subject("self-banning-holder");
+    let operation = check(80);
+    let binding = global
+        .contact_binding("cphn", "twilio", &alice, &operation)
+        .unwrap();
+    let (fact, _) = phone::fact(&binding, PHONE, COHORT + 1, false).await;
+    let phone = PhoneGate::new(binding, fact).unwrap();
+    global
+        .run_gate(&phone, &alice, phone.input(), 100, &operation)
+        .await
+        .unwrap();
+    let account_key = storage::Key::new("account", alice.as_str());
+    let before = store
+        .read(std::slice::from_ref(&account_key))
+        .await
+        .unwrap();
+    let before_account: serde_json::Value =
+        serde_json::from_slice(&before.records[&account_key].value).unwrap();
+    let fingerprints = store.list("fingerprint", "", 10).await.unwrap();
+    assert_eq!(fingerprints.records.len(), 1);
+    let suspension = Suspension::Permanent(PermanentReason::SelfBan);
+    assert_eq!(
+        global
+            .suspend(&alice, suspension.clone(), 101)
+            .await
+            .unwrap(),
+        2
+    );
+    assert_eq!(global.suspend(&alice, suspension, 102).await.unwrap(), 2);
+    let after = store
+        .read(std::slice::from_ref(&account_key))
+        .await
+        .unwrap();
+    let after_account: serde_json::Value =
+        serde_json::from_slice(&after.records[&account_key].value).unwrap();
+    for field in ["gates", "fingerprints", "check_ids", "check_inputs"] {
+        assert_eq!(before_account[field], after_account[field]);
+    }
+    let retained = store.list("fingerprint", "", 10).await.unwrap();
+    assert_eq!(fingerprints.revisions, retained.revisions);
+    for (key, record) in fingerprints.records {
+        assert_eq!(record.value, retained.records[&key].value);
+        assert_eq!(record.deadline, retained.records[&key].deadline);
+    }
+    assert!(matches!(
+        global
+            .run_gate(&phone, &alice, phone.input(), 103, &operation)
+            .await,
+        Err(Error::Suspended)
+    ));
+    let replacement = subject("replacement-holder");
+    let operation = check(81);
+    let binding = global
+        .contact_binding("cphn", "twilio", &replacement, &operation)
+        .unwrap();
+    let (fact, _) = phone::fact(&binding, PHONE, COHORT + 1, false).await;
+    let phone = PhoneGate::new(binding, fact).unwrap();
+    assert!(matches!(
+        global
+            .run_gate(&phone, &replacement, phone.input(), 103, &operation)
+            .await,
+        Err(Error::Duplicate)
+    ));
+}
 fn amount() -> cost::Amount {
     cost::Amount {
         unit: cost::Unit {

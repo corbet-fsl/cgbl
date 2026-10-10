@@ -73,6 +73,116 @@ async fn make() -> (Facade, MemoryStore, csgn::MemoryStore, cpsd::MemoryStore) {
     install(&global, 1, 1, COHORT, 100, "sms").await.unwrap();
     (global, store, keys, issuance)
 }
+
+#[tokio::test]
+async fn permanent_self_ban_before_any_gate_creates_only_terminal_state_and_survives_reopening() {
+    let (global, store, keys, issuance) = make().await;
+    let who = subject("wallet-before-first-gate");
+    let suspension = Suspension::Permanent(PermanentReason::SelfBan);
+    assert!(!global.self_ban_status(&who).await.unwrap());
+    assert_eq!(
+        global.suspend(&who, suspension.clone(), 101).await.unwrap(),
+        2
+    );
+    assert_eq!(
+        global.suspend(&who, suspension.clone(), 102).await.unwrap(),
+        2
+    );
+    let read = store
+        .read(&[storage::Key::new("account", who.as_str())])
+        .await
+        .unwrap();
+    let account: serde_json::Value =
+        serde_json::from_slice(&read.records[&storage::Key::new("account", who.as_str())].value)
+            .unwrap();
+    for field in ["gates", "fingerprints", "check_ids", "check_inputs"] {
+        assert!(
+            account[field].as_object().unwrap().is_empty(),
+            "self-ban must not fabricate prior successful verification"
+        );
+    }
+    assert_eq!(global.revocations("", 10).await.unwrap().len(), 1);
+    assert!(global.self_ban_status(&who).await.unwrap());
+    let reopened = open(store, keys, issuance, true).await;
+    assert!(reopened.self_ban_status(&who).await.unwrap());
+    assert_eq!(reopened.suspend(&who, suspension, 103).await.unwrap(), 2);
+    let provider = Provider::default();
+    assert!(matches!(
+        reopened
+            .run_gate(&provider, &who, b"unverified-input", 103, &check())
+            .await,
+        Err(Error::Suspended)
+    ));
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+    assert!(matches!(
+        reopened
+            .challenge(
+                &mut StdRng::seed_from_u64(22),
+                &session(who.as_str()),
+                103,
+                113
+            )
+            .await,
+        Err(Error::Suspended)
+    ));
+    assert!(matches!(reopened.warn(&who).await, Err(Error::Suspended)));
+    assert!(matches!(
+        reopened
+            .suspend(
+                &who,
+                Suspension::Permanent(PermanentReason::LegalOrder),
+                104
+            )
+            .await,
+        Err(Error::Suspended)
+    ));
+    assert!(matches!(
+        reopened
+            .suspend(&who, Suspension::Temporary { until: DAY }, 104)
+            .await,
+        Err(Error::Suspended)
+    ));
+}
+
+#[tokio::test]
+async fn missing_subject_still_refuses_legal_and_temporary_suspension_without_writing() {
+    let (global, store, _, _) = make().await;
+    let who = subject("unknown-non-self-ban");
+    for suspension in [
+        Suspension::Permanent(PermanentReason::LegalOrder),
+        Suspension::Temporary { until: DAY },
+    ] {
+        assert!(matches!(
+            global.suspend(&who, suspension, 101).await,
+            Err(Error::UnknownSubject)
+        ));
+    }
+    assert!(matches!(
+        global.warn(&who).await,
+        Err(Error::UnknownSubject)
+    ));
+    assert!(
+        store
+            .read(&[storage::Key::new("account", who.as_str())])
+            .await
+            .unwrap()
+            .records
+            .is_empty()
+    );
+    assert!(global.revocations("", 10).await.unwrap().is_empty());
+    // A later genuine self-ban can still terminate this unverified account.
+    assert_eq!(
+        global
+            .suspend(
+                &who,
+                Suspension::Permanent(PermanentReason::SelfBan),
+                COHORT + 1
+            )
+            .await
+            .unwrap(),
+        2
+    );
+}
 async fn install(
     global: &Facade,
     revision: u64,

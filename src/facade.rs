@@ -138,7 +138,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             limits,
         })
     }
-    async fn read(&self, mut keys: Vec<Key>) -> Result<ReadSet> {
+    pub(crate) async fn read(&self, mut keys: Vec<Key>) -> Result<ReadSet> {
         keys.extend([meta("binding"), meta("state")]);
         let read = self.store.read(&keys).await?;
         if get::<Binding>(&read, &meta("binding"))?.as_ref() != Some(&self.binding) {
@@ -602,6 +602,8 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     }
     /// Apply an authorized suspension and atomically advance the public epoch.
     /// Permanent records cannot be replaced or downgraded. Exact retries are idempotent.
+    /// A host-authenticated self-ban may terminate a subject before its first
+    /// successful gate. No gate or uniqueness fingerprint is invented for it.
     pub async fn suspend(
         &self,
         subject: &Subject,
@@ -623,7 +625,13 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             .await?;
         // Suspension still works when the previous passport policy has expired.
         let mut state: State = get(&read, &meta("state"))?.ok_or(Error::NoPolicy)?;
-        let mut person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
+        let mut person: Account = match get(&read, &account(subject))? {
+            Some(person) => person,
+            None if suspension == Suspension::Permanent(PermanentReason::SelfBan) => {
+                Account::default()
+            }
+            None => return Err(Error::UnknownSubject),
+        };
         if person.suspension.as_ref() == Some(&suspension) {
             return state.epoch();
         }
