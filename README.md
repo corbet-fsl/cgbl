@@ -130,3 +130,11 @@ The volatile and SQL stores select bounded expired challenges by deadline and
 then key, so a lexically early newer row cannot displace an older expired row.
 Real parity tests use opposing key/deadline order and a non-challenge row; imported
 SQLite type corruption and exhausted revisions must refuse without partial writes.
+
+`payments::PaymentGate` wraps an already verified, context-bound cpmt/crpt payment
+fact. It makes no provider call and cannot cause a charge during a retry. Its
+opaque `input()` binds into the existing global check machinery; payer, wallet,
+billing and KYC data never reach cgbl. Payment proves no person uniqueness: its
+policy requirement must have `uniqueness = false`, alongside the existing separate
+uniqueness gate. cpmt's exclusive validity is converted conservatively to cgbl's
+inclusive validity before the existing UTC-day floor.

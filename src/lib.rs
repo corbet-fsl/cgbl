@@ -7,6 +7,7 @@ mod build_policy;
 pub mod development;
 mod facade;
 mod fingerprint;
+pub mod payments;
 pub mod storage;
 mod types;
 /// Issuer protocol messages only. Holder APIs stay in the cpsd leaf.

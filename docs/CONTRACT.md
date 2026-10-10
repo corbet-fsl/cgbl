@@ -130,3 +130,13 @@ The cached path rechecks the durable state fence and requires the exact current
 policy revision, epoch, cohort and issuer key. It never accepts a deadline that
 is already expired after day rounding. Beacon supplies no durable storage or
 member authority. A backward observed clock fails closed.
+
+## Payment handoff
+
+Construct `payments::PaymentGate` with in-process `cpmt::payments::Evidence` from
+the authenticated payment boundary, then pass `gate.input()` to `run_gate`.
+Scope, member, action, provider and expiry are checked again. No provider calls
+occur in this adapter; the payment executor owns payment idempotency and binds
+receipts to their authenticated context. Global check retries remain idempotent.
+Do not classify payment receipts as person-uniqueness evidence. The adapter emits
+`uniqueness: None`, so a policy that demands uniqueness from it fails closed.
