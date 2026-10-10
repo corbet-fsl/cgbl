@@ -14,7 +14,7 @@ Copyright 2026 Julian Y. Richard Corbet. Licensed under the [Functional Source L
 See [docs/CONTRACT.md](docs/CONTRACT.md). The global service owns its own database
 and signing keys. Community databases and pseudonyms never enter this facade.
 
-Reviewed GitHub main, upstream documentation and crates.io on 2026-09-30:
+Reviewed upstream main branches, documentation and crates.io on 2026-09-30:
 
 | Need | Candidates and decision |
 |---|---|
@@ -79,7 +79,7 @@ Do not enable SQL/HTTP debug logging of inputs.
 
 ## Validation and remaining boundaries
 
-GitHub Actions runs stable Rust formatting, Clippy with warnings denied, tests for
+CI runs stable Rust formatting, Clippy with warnings denied, tests for
 both the production default and opt-in development gate, and resolved dependency
 license/pin checks. Real memory and local libSQL tests cover blind issuance and
 proofs, uniqueness/tag continuity, shared expiry, replay, malformed requests,
