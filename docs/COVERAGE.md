@@ -9,7 +9,7 @@ The coverage job executes real tests with cargo-llvm-cov and retains the raw JSO
 even when the gate fails. The checker compares integer covered/total counts for
 both metrics; rounded percentages cannot pass. An empty report cannot pass.
 The report excludes integration-test harness files under tests/, not production
-code. No production source exclusions are currently approved.
+code. Three exact unreachable native branch arms are excluded as documented below.
 
 A failing gate is missing evidence, not permission to lower the threshold or
 change domain behavior. Add meaningful failure and round-trip tests. Document
@@ -33,7 +33,7 @@ its stricter instantiation totals are not described as passed.
 
 The source gate requires a nonempty report, an exact file inventory matching the
 companion JSON, matching raw summary metadata, complete emitted branch counts
-and no duplicate, unknown or zero counters. Raw reports retain every production counter. The three precise branch proposals below are applied only after validating the complete report inventories.
+and no duplicate, unknown or zero counters. Raw reports retain every production counter. The three precise branch exceptions below are applied only after validating the complete report inventories.
 Actual browser/device execution remains separate from native coverage.
 
 The coverage job sets `CARGO_PROFILE_TEST_OPT_LEVEL=0` for this workspace. The
@@ -47,7 +47,8 @@ is a diagnostic correction, not evidence that the remaining gaps are covered.
 
 ## Proposed invariant exceptions
 
-These are review proposals, not independent security acceptance. Run
+These are source-bound exclusions used by the gate, not covered branches or
+independent security acceptance. The original evidence run
 36938685007,
 head `1ed3789b427ff9877e05a45f610ca411be05fb74`, executed all 1,057
 production lines and 229 of 232 emitted branch arms. Ordinary native,
@@ -55,7 +56,7 @@ all-feature, strict Clippy and release suites passed. The real cached-publicatio
 concurrent-write test now executes the previously missing revision-conflict line;
 no race, storage error, cryptographic error or resource failure is excluded.
 
-Only these three native arms are proposed:
+Only these three native arms are excluded:
 
 - `src/facade.rs:193`, block 0 arm 0: `gate.gate == "development"` cannot be true
   here in production mode. `Global::open` rejects any production issuer whose
@@ -81,12 +82,12 @@ Only these three native arms are proposed:
   API returns an immutable issuer string and this code cannot change it. Epoch
   and revision refusal arms on the same compound condition remain required.
 
-Each proposal binds the exact source line/arm, the SHA-256 of the complete owned
+Each exception binds the exact source line/arm, the SHA-256 of the complete owned
 source file and the unique full Git identity of relevant upstream packages in
 Cargo.lock. An upstream change requires renewed proof; unrelated dependency
 refreshes do not silently invalidate or broaden the exception. The checker still
 reconciles raw JSON, LCOV and annotated source before subtracting only these
-three arms. All 1,057 lines remain required. Seventeen checker regressions cover
+three arms. All emitted production lines remain required. Seventeen checker regressions cover
 missing/duplicate counters, changed source, package identity drift and invalid
 exceptions. No production code was changed to satisfy these proofs.
 
@@ -100,3 +101,10 @@ CPSD's `src/issuer.rs` and the complete Beacon/Signatures `src` trees have no
 diff from the previously recorded proof revisions. Their private fields,
 immutable accessors and authenticated exact-byte cache retain the invariants
 above. Only the recorded dependency identities changed; no exception was added.
+
+## Current measured result
+
+Crow 283/30 at `16f00aba` reported 1,199/1,199 production source lines and
+237/237 required branch arms. The raw branch result is 237/240 (98.75%);
+subtracting the three source-bound unreachable arms gives the enforced 100%.
+The older counts above describe the original invariant review, not current totals.
