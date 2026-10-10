@@ -63,5 +63,6 @@ printf 'coverage-setup pwd=%s coverage_target=%s\n' "$PWD" "$coverage_target"
 "$NIGHTLY_CARGO" llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage --no-cfg-coverage-nightly --ignore-filename-regex '/tests/' --json --output-path coverage.json 2>&1
 "$NIGHTLY_CARGO" llvm-cov report --locked --branch --ignore-filename-regex '/tests/' --lcov --output-path coverage.lcov 2>&1
 "$NIGHTLY_CARGO" llvm-cov report --locked --branch --ignore-filename-regex '/tests/' --text --output-path coverage.txt 2>&1
+cp coverage.json coverage.lcov coverage.txt "$ARTIFACT_ROOT/"
 python3 .github/test-source-coverage.py 2>&1
 python3 .github/check-source-coverage.py coverage.lcov coverage.json coverage.txt 2>&1

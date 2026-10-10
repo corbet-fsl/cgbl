@@ -93,3 +93,10 @@ exceptions. No production code was changed to satisfy these proofs.
 Upstream evidence: [CPSD immutable issuer API](https://github.com/corbet-foss/cpsd/blob/a23616e906ffa924aa5bda667e7ea1edf3a692d4/src/issuer.rs),
 [Beacon exact-byte cache](https://github.com/corbet-foss/cbcn/blob/53ed942cdc1439fcedbc9914cf6cc44f83020d29/src/document.rs),
 [Signatures](https://github.com/corbet-foss/csgn/tree/fac7f49eeb4e4bb9b72de640b46e55d8fe99119c).
+
+Payment-adapter dependency refresh (2026-10-10): rechecked the existing three
+proofs against CPSD `da700af6`, Beacon `d374cf91`, and Signatures `427b82cd`.
+CPSD's `src/issuer.rs` and the complete Beacon/Signatures `src` trees have no
+diff from the previously recorded proof revisions. Their private fields,
+immutable accessors and authenticated exact-byte cache retain the invariants
+above. Only the recorded dependency identities changed; no exception was added.
