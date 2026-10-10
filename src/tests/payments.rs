@@ -3,7 +3,6 @@ use cpmt::payments as p;
 use std::sync::Arc;
 
 struct Provider;
-#[async_trait::async_trait]
 impl p::Adapter for Provider {
     fn capabilities(&self) -> p::Capabilities {
         p::Capabilities {
