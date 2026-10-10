@@ -140,3 +140,13 @@ occur in this adapter; the payment executor owns payment idempotency and binds
 receipts to their authenticated context. Global check retries remain idempotent.
 Do not classify payment receipts as person-uniqueness evidence. The adapter emits
 `uniqueness: None`, so a policy that demands uniqueness from it fails closed.
+
+
+For level-and-period access, `payments::PaidAccessGate` accepts the protected
+`cpmt::access::PaidAccess` result. The payment library verifies the configured
+financial terms and transforms them before this boundary. The gate checks the
+exact requested level (no implicit ranking), current period and existing context
+and provider binding. It receives no amount, currency, payment instrument or
+provider response. `PaymentGate` remains available for other explicitly selected
+financial facts. Production dispatch, cost authorization and local simulation
+remain inside cpmt/crpt; these gate adapters never contact payment providers.

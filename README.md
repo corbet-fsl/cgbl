@@ -138,3 +138,13 @@ billing and KYC data never reach cgbl. Payment proves no person uniqueness: its
 policy requirement must have `uniqueness = false`, alongside the existing separate
 uniqueness gate. cpmt's exclusive validity is converted conservatively to cgbl's
 inclusive validity before the existing UTC-day floor.
+
+
+For level-and-period access, `payments::PaidAccessGate` accepts the protected
+`cpmt::access::PaidAccess` result. The payment library verifies the configured
+financial terms and transforms them before this boundary. The gate checks the
+exact requested level (no implicit ranking), current period and existing context
+and provider binding. It receives no amount, currency, payment instrument or
+provider response. `PaymentGate` remains available for other explicitly selected
+financial facts. Production dispatch, cost authorization and local simulation
+remain inside cpmt/crpt; these gate adapters never contact payment providers.
