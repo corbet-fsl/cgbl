@@ -221,6 +221,25 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             .compare_exchange(&read, vec![put(meta("state"), &state)?])
             .await
     }
+    /// Correlate a trusted phone/mailbox ceremony with this host's exact global
+    /// scope, authenticated subject, provider and retained caller check identity.
+    /// The returned binding cannot be supplied through member JSON.
+    pub fn contact_binding(
+        &self,
+        gate: &str,
+        provider: &str,
+        subject: &Subject,
+        check: &CheckId,
+    ) -> Result<crate::contacts::ContactBinding> {
+        crate::contacts::ContactBinding::derive(
+            &self.fingerprints,
+            self.store.scope(),
+            gate,
+            provider,
+            subject,
+            check,
+        )
+    }
     /// Execute a trusted adapter, validate policy, and atomically reserve any
     /// uniqueness input. Input and canonical evidence are never persisted.
     pub async fn run_gate<G: GlobalGate>(
@@ -483,6 +502,24 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         request: &IssuanceRequest,
         now: u64,
     ) -> Result<cpsd::BlindPassport> {
+        self.issue_with_deadline_guard(rng, session, challenge, request, now, |_| Ok(()))
+            .await
+    }
+    /// Observe the authenticated pending deadline before proof work or consumption.
+    /// The host can bind its live output guard; refusing leaves the nonce and
+    /// holder continuity unchanged. The callback observes the same pending state
+    /// whose revisions fence issuance, not an independent metadata lookup.
+    /// This preserves CPSD's inclusive deadline and does not establish fresh
+    /// time inside its storage transaction or undo a completed issuance.
+    pub async fn issue_with_deadline_guard<R: RngCore + CryptoRng>(
+        &self,
+        rng: &mut R,
+        session: &Session,
+        challenge: &IssuanceChallenge,
+        request: &IssuanceRequest,
+        now: u64,
+        guard: impl FnOnce(PendingIssuanceDeadline) -> Result<()>,
+    ) -> Result<cpsd::BlindPassport> {
         let subject = &session.subject;
         let pending_key = Key::new("challenge", subject.as_str());
         let revocation_key = Key::new("revocation", subject.as_str());
@@ -504,6 +541,9 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         }
         let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
         let attributes = self.attributes(&state, &person, subject, now)?;
+        guard(PendingIssuanceDeadline {
+            inclusive: pending.deadline,
+        })?;
         let passport = cpsd::issue_blind_once(
             rng,
             &self.issuance,

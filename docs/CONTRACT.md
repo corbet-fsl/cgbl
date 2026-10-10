@@ -80,6 +80,16 @@ allocate unlimited orphan nonces. Issuance removes it; expiry/pruning frees it.
 A lost or uncertain response may require waiting for that short deadline before
 a new challenge. Pruning never touches permanent uniqueness or holder bindings.
 
+`issue_with_deadline_guard` supplies a nonserializable
+`PendingIssuanceDeadline` only after authenticating the pending epoch, session,
+nonce and current gate eligibility. It observes the same record whose revisions
+fence issuance; there is no separate deadline lookup. The deadline is inclusive,
+matching CPSD. A host's exclusive output guard may use checked addition of one.
+Callback refusal happens before proof work, nonce consumption or first holder
+binding. The original `issue` delegates with a no-op callback. This seam bounds
+host output only when that host supplies a live guard; it does not enforce fresh
+time inside CPSD's atomic storage operation or undo a completed issuance.
+
 ## Policy, suspension and publications
 
 A separate authenticated global authority signs the typed `Policy` JSON as a
@@ -130,6 +140,21 @@ The cached path rechecks the durable state fence and requires the exact current
 policy revision, epoch, cohort and issuer key. It never accepts a deadline that
 is already expired after day rounding. Beacon supplies no durable storage or
 member authority. A backward observed clock fails closed.
+
+## Phone and mailbox handoff
+
+`Global::contact_binding` derives the sealed expected scope, gate/provider,
+authenticated subject and retained check identity before a leaf ceremony.
+Its context builders fix the leaf binding and scope and request minimal output.
+The trusted host must use that context with the selected real adapter and a
+stable comparison key: phone/mailbox facts retain an opaque binding, not
+independently inspectable provider/scope provenance. Never reconstruct expected
+context from a returned fact or deserialize a member-supplied verified result.
+`contacts::PhoneGate` and `MailboxGate` consume the real opaque leaf fact and
+recheck the exact correlation and expiry without I/O or a second registration
+claim. Identifier control establishes comparison in that domain, not unique
+human identity. Global policy and the existing atomic fingerprint owner decide
+how that supported guarantee may be used.
 
 ## Payment handoff
 

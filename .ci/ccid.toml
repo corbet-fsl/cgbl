@@ -20,3 +20,16 @@ scheduler = "crow"
 checks = ["verify", "advisories"]
 workflow = "repository-jobs"
 command = ["bash", ".ci/run-cached.sh"]
+
+# Resolve and retain the changed graph without claiming validation.
+[checks.resolve-dependencies]
+kind = "commands"
+commands = [["bash", ".ci/resolve-dependencies.sh"]]
+cache = false
+cache_outputs = ["Cargo.lock", "dependency-metadata.json"]
+
+[jobs.resolve-dependencies]
+scheduler = "crow"
+checks = ["resolve-dependencies"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]

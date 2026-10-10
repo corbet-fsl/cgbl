@@ -5,8 +5,8 @@ set -euo pipefail
 : "${CI_COMMIT_SHA:?Missing verified source revision}"
 : "${CI_REPOSITORY_URL:?Missing canonical repository identity}"
 : "${CHECKS:?Missing declared check selection}"
-if [ "$CHECKS" != "verify,advisories" ]; then
-  echo "CHECKS must be exactly 'verify,advisories', got: $CHECKS" >&2
+if [ "$CHECKS" != "verify,advisories" ] && [ "$CHECKS" != "resolve-dependencies" ]; then
+  echo "CHECKS must be verify,advisories or resolve-dependencies, got: $CHECKS" >&2
   exit 2
 fi
 cache_root=${CI_CACHE_ROOT:-${CARGO_HOME:-}}
@@ -80,6 +80,9 @@ retain_coverage() {
   exit "$status"
 }
 trap retain_coverage EXIT
+if [ "$CHECKS" = "resolve-dependencies" ]; then
+  exec "$CCID_BIN" check --repo "$PWD" --check resolve-dependencies
+fi
 "$CCID_BIN" cached --repo "$PWD" --check verify
 test -s ".ccid/results/verify.jsonl"
 "$CCID_BIN" check --repo "$PWD" --check advisories

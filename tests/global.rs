@@ -12,6 +12,202 @@ use cpsd::{
 
 const DAY: u64 = 86_400;
 const COHORT: u64 = 5 * DAY;
+
+async fn deadline_fixture() -> Global<MemoryStore, csgn::MemoryStore, cpsd::MemoryStore> {
+    let global = make(
+        MemoryStore::new("deadline").unwrap(),
+        csgn::MemoryStore::default(),
+        challenges("deadline", 20),
+        1,
+    )
+    .await;
+    install(
+        &global,
+        &mut authority().await,
+        &policy("deadline", 1, 1, COHORT),
+        10,
+    )
+    .await
+    .unwrap();
+    global
+        .run_gate(
+            &DevelopmentGate::new(COHORT),
+            &subject("deadline-person"),
+            b"fictional-unique-person",
+            100,
+            &check(),
+        )
+        .await
+        .unwrap();
+    global
+}
+
+#[tokio::test]
+async fn guarded_issuance_observes_the_inclusive_deadline_and_refuses_the_following_tick() {
+    for now in [110, 111] {
+        let global = deadline_fixture().await;
+        let who = subject("deadline-person");
+        let mut rng = StdRng::seed_from_u64(4100 + now);
+        let challenge = global
+            .challenge(&mut rng, &session(&who), 100, 110)
+            .await
+            .unwrap();
+        let secret = HolderSecret::generate(&mut rng);
+        let (request, pending) =
+            cpsd::request_issue(&mut rng, &secret, global.issuer_public_key(), &challenge).unwrap();
+        let calls = std::cell::Cell::new(0);
+        let result = global
+            .issue_with_deadline_guard(
+                &mut rng,
+                &session(&who),
+                &challenge,
+                &request,
+                now,
+                |deadline| {
+                    calls.set(calls.get() + 1);
+                    assert_eq!(deadline.inclusive(), 110);
+                    Ok(())
+                },
+            )
+            .await;
+        if now == 110 {
+            pending.finish(&result.unwrap()).unwrap();
+            assert_eq!(calls.get(), 1);
+        } else {
+            assert!(matches!(result, Err(Error::Challenge)));
+            assert_eq!(calls.get(), 0);
+        }
+    }
+}
+
+#[tokio::test]
+async fn issuance_deadline_is_not_observed_for_a_wrong_subject_session_or_nonce() {
+    let global = deadline_fixture().await;
+    let who = subject("deadline-person");
+    let mut rng = StdRng::seed_from_u64(4300);
+    let challenge = global
+        .challenge(&mut rng, &session(&who), 100, 110)
+        .await
+        .unwrap();
+    let secret = HolderSecret::generate(&mut rng);
+    let (request, pending) =
+        cpsd::request_issue(&mut rng, &secret, global.issuer_public_key(), &challenge).unwrap();
+    let wrong_nonce = IssuanceChallenge::generate(&mut rng);
+    for (auth, nonce) in [
+        (session(&subject("other-person")), &challenge),
+        (
+            Session::authenticated(who.clone(), [8; 32]).unwrap(),
+            &challenge,
+        ),
+        (session(&who), &wrong_nonce),
+    ] {
+        let calls = std::cell::Cell::new(0);
+        assert!(matches!(
+            global
+                .issue_with_deadline_guard(&mut rng, &auth, nonce, &request, 100, |_| {
+                    calls.set(calls.get() + 1);
+                    Ok(())
+                })
+                .await,
+            Err(Error::Challenge)
+        ));
+        assert_eq!(calls.get(), 0);
+    }
+    // Invalid bindings must leave the real nonce usable through the original API.
+    let blind = global
+        .issue(&mut rng, &session(&who), &challenge, &request, 110)
+        .await
+        .unwrap();
+    pending.finish(&blind).unwrap();
+}
+
+#[tokio::test]
+async fn refusing_the_deadline_guard_preserves_the_nonce_and_first_holder_binding() {
+    let global = deadline_fixture().await;
+    let who = subject("deadline-person");
+    let mut rng = StdRng::seed_from_u64(4400);
+    let challenge = global
+        .challenge(&mut rng, &session(&who), 100, 110)
+        .await
+        .unwrap();
+    let refused_secret = HolderSecret::generate(&mut rng);
+    let (request, _) = cpsd::request_issue(
+        &mut rng,
+        &refused_secret,
+        global.issuer_public_key(),
+        &challenge,
+    )
+    .unwrap();
+    let calls = std::cell::Cell::new(0);
+    let result = global
+        .issue_with_deadline_guard(
+            &mut rng,
+            &session(&who),
+            &challenge,
+            &request,
+            100,
+            |deadline| {
+                calls.set(calls.get() + 1);
+                assert_eq!(deadline.inclusive(), 110);
+                Err(Error::Challenge)
+            },
+        )
+        .await;
+    assert!(
+        matches!(result, Err(Error::Challenge)),
+        "a refusing deadline guard must stop issuance before nonce consumption"
+    );
+    assert_eq!(calls.get(), 1);
+    // A different real holder can still perform the first issuance: refusal
+    // must neither consume the challenge nor register the rejected holder tag.
+    let accepted_secret = HolderSecret::generate(&mut rng);
+    let (request, pending) = cpsd::request_issue(
+        &mut rng,
+        &accepted_secret,
+        global.issuer_public_key(),
+        &challenge,
+    )
+    .unwrap();
+    let blind = global
+        .issue(&mut rng, &session(&who), &challenge, &request, 110)
+        .await
+        .unwrap();
+    pending.finish(&blind).unwrap();
+}
+
+#[tokio::test]
+async fn a_changed_policy_epoch_refuses_before_observing_the_issuance_deadline() {
+    let global = deadline_fixture().await;
+    let who = subject("deadline-person");
+    let mut rng = StdRng::seed_from_u64(4500);
+    let challenge = global
+        .challenge(&mut rng, &session(&who), 100, 110)
+        .await
+        .unwrap();
+    let secret = HolderSecret::generate(&mut rng);
+    let (request, _) =
+        cpsd::request_issue(&mut rng, &secret, global.issuer_public_key(), &challenge).unwrap();
+    install(
+        &global,
+        &mut authority().await,
+        &policy("deadline", 2, 2, COHORT),
+        100,
+    )
+    .await
+    .unwrap();
+    let calls = std::cell::Cell::new(0);
+    assert!(matches!(
+        global
+            .issue_with_deadline_guard(&mut rng, &session(&who), &challenge, &request, 100, |_| {
+                calls.set(calls.get() + 1);
+                Ok(())
+            },)
+            .await,
+        Err(Error::Challenge)
+    ));
+    assert_eq!(calls.get(), 0);
+}
+
 fn check() -> CheckId {
     CheckId::generate(&mut cpsd::rand::rngs::OsRng)
 }

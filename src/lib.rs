@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 #[cfg(test)]
 mod build_policy;
+pub mod contacts;
 #[cfg(all(feature = "development-gate", cgbl_development))]
 pub mod development;
 mod facade;

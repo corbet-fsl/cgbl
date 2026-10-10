@@ -12,6 +12,8 @@ cargo metadata --locked --format-version 1 > dependency-metadata.json
 node .github/check-pins.mjs dependency-metadata.json
 cargo clippy --locked --all-targets -- -D warnings
 cargo clippy --locked --all-targets --all-features -- -D warnings
+python3 -B .ci/test-issuance-deadline-control.py
+python3 -B .ci/issuance-deadline-control.py
 cargo test --locked -- --nocapture
 cargo test --locked --all-features -- --nocapture
 cargo test --locked --release --all-features

@@ -215,6 +215,20 @@ pub(crate) struct Pending {
     pub deadline: u64,
 }
 
+/// Deadline from the authenticated pending issuance selected by the facade.
+/// This is an observation for a host output guard, never a passport or proof.
+/// No member input can construct it; the facade still owns nonce consumption.
+pub struct PendingIssuanceDeadline {
+    pub(crate) inclusive: u64,
+}
+impl PendingIssuanceDeadline {
+    /// Inclusive CPSD deadline. An exclusive host guard may use checked addition
+    /// of one; it must not reinterpret the opaque challenge bytes as a timestamp.
+    pub fn inclusive(&self) -> u64 {
+        self.inclusive
+    }
+}
+
 #[derive(PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct Binding {
     pub version: u32,
