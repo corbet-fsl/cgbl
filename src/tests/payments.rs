@@ -39,7 +39,8 @@ impl p::Adapter for Provider {
 }
 
 async fn operation() -> (p::Payments<p::MemoryJournal>, p::Instruction, p::Outcome) {
-    let mut payments = p::Payments::new(p::MemoryJournal::default(), [7; 32]).unwrap();
+    let mut payments =
+        p::Payments::new(p::MemoryJournal::default(), [7; 32], Arc::new(|| 1100)).unwrap();
     payments.register(Arc::new(Provider)).unwrap();
     let request = p::Instruction {
         id: [1; 32],
