@@ -581,6 +581,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "cfbk"
+version = "0.0.0"
+source = "git+https://git.corbet.ch/corbet-foss/cfbk?branch=main#74928e72164e93116691206cc6873fb23cee10bd"
+
+[[package]]
 name = "cfg-if"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -800,8 +805,9 @@ dependencies = [
 [[package]]
 name = "cpmt"
 version = "0.2.0"
-source = "git+https://git.corbet.ch/corbet-foss/cpmt?branch=main#69b7979de877ee8b4d328b300a48f32cadcbc7f2"
+source = "git+https://git.corbet.ch/corbet-foss/cpmt?branch=main#96efca173e3264b16d90b312a7eb7a527291654f"
 dependencies = [
+ "cfbk",
  "ed25519-dalek",
  "hmac 0.13.0",
  "serde",
