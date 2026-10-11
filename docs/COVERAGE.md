@@ -65,7 +65,7 @@ Only these three native arms are excluded:
   replacement API. The exact CPSD source bound in the manifest gives its public
   key private fields and read-only catalogue access. The other reserved-provider
   arm is reachable and executed; it remains required.
-- `src/facade.rs:710`, block 0 arm 1: an issuer mismatch cannot arise from this
+- `src/facade.rs:709`, block 0 arm 1: an issuer mismatch cannot arise from this
   private cache. Its sole installation path is `signed_status`, which constructs
   `Status.issuer_public_key` from the immutable `self.binding.issuer`, signs that
   payload, and installs those exact bytes. The cache starts empty on every open;
@@ -75,7 +75,7 @@ Only these three native arms are excluded:
   payload bytes. Imported storage binding changes are refused by `read` before
   the cache path. Tests exercise policy-version rollback, changed shared expiry,
   valid cache reuse, actual signer invalidation and concurrent storage changes.
-- `src/facade.rs:800`, block 0 arm 0: a scope mismatch is impossible after the two
+- `src/facade.rs:799`, block 0 arm 0: a scope mismatch is impossible after the two
   preceding checks. The first requires `ring.issuer() == format!("cgbl:{scope}")`;
   `validate_publication` then requires that same issuer to equal the same literal
   prefix plus `value.scope`. Prefix concatenation is injective. The bound key-ring
@@ -142,6 +142,5 @@ package. No line, branch, category or threshold was added or broadened.
 
 Operator-suspension removal refresh (2026-10-11): the temporary suspension, warning
 flag and operator `warn` were deleted; only the legal-order and self-ban permanent
-suspensions remain. The three defensive arms are unchanged and moved to lines 197,
-710 and 800. Only the complete facade evidence hash and line numbers were refreshed;
+suspensions remain. The three defensive arms are unchanged and moved to lines 197, 709, 799. Only the complete facade evidence hash and line numbers were refreshed;
 no new line, branch, category or threshold is excluded.
