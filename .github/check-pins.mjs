@@ -3,15 +3,23 @@ import { pathToFileURL } from 'node:url';
 
 const corbetSource = /^git\+https:\/\/git\.corbet\.ch\/corbet-(?:foss|libs)\//;
 
-function checkSource(source, resolved) {
+const originalOwners = new Map([
+  ['cchr', 'https://git.corbet.ch/corbet-foss/cchr'],
+  ['cmbl', 'https://git.corbet.ch/corbet-foss/cmbl.git'],
+  ['cmmr', 'https://git.corbet.ch/corbet-foss/cmmr.git'],
+  ['cvlk', 'https://git.corbet.ch/corbet-foss/cvlk.git'],
+]);
+
+function checkSource(source, resolved, name) {
   const url = new URL(source.slice(4));
   const revision = url.searchParams.get('rev');
-  const main = url.searchParams.toString() === 'branch=main';
+  const branch = originalOwners.get(name) === `${url.origin}${url.pathname}` ? 'v01' : 'main';
+  const approved = url.searchParams.toString() === `branch=${branch}`;
   const pinned = [...url.searchParams.keys()].join() === 'rev'
     && /^[a-f0-9]{40}$/.test(revision ?? '');
-  if ((!main && !pinned) || (resolved && (!/^#[a-f0-9]{40}$/.test(url.hash)
+  if ((!approved && !pinned) || (resolved && (!/^#[a-f0-9]{40}$/.test(url.hash)
       || (pinned && url.hash !== `#${revision}`)))) {
-    throw new Error(`Expected main or a matching transitive revision pin: ${source}`);
+    throw new Error(`Expected approved owner branch or a matching transitive revision pin: ${source}`);
   }
 }
 
@@ -20,12 +28,12 @@ export function checkPins(metadata) {
   for (const pkg of metadata.packages) {
     if (corbetSource.test(pkg.source ?? '')) {
       names.add(pkg.name);
-      checkSource(pkg.source, true);
+      checkSource(pkg.source, true, pkg.name);
     }
-    // Inspect upstream selectors too; each repository enforces its own main declarations.
+    // Inspect upstream selectors too, preserving exact original owner exceptions.
     for (const dependency of pkg.dependencies) {
       if (corbetSource.test(dependency.source ?? '')) {
-        checkSource(dependency.source, false);
+        checkSource(dependency.source, false, dependency.name);
       }
     }
   }

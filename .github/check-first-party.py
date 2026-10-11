@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Require main declarations and one resolved revision per first-party crate."""
+"""Require approved original owners and one resolved first-party identity."""
 import re
 import subprocess
 import sys
@@ -9,6 +9,18 @@ from urllib.parse import parse_qs, urlsplit
 
 FIRST_PARTY = re.compile(r"^(?:git\+)?https://git\.corbet\.ch/(?:corbet-(?:foss|libs)|cmtymeet)/")
 SHA = re.compile(r"^[0-9a-f]{40}$")
+# Retained original protocol owners only; this is not a generic branch exception.
+ORIGINAL = {
+    'cchr': 'https://git.corbet.ch/corbet-foss/cchr',
+    'cmbl': 'https://git.corbet.ch/corbet-foss/cmbl.git',
+    'cmmr': 'https://git.corbet.ch/corbet-foss/cmmr.git',
+    'cvlk': 'https://git.corbet.ch/corbet-foss/cvlk.git',
+}
+
+
+def owner_branch(repo, package):
+    return 'v01' if ORIGINAL.get(package) == repo else 'main'
+
 
 
 def check_lock(packages):
@@ -21,17 +33,20 @@ def check_lock(packages):
         query = parse_qs(source.query, keep_blank_values=True)
         if not SHA.fullmatch(source.fragment):
             raise ValueError(f'Missing resolved revision for {name}')
-        if query != {'branch': ['main']}:
+        repo = source._replace(query='', fragment='').geturl()
+        expected = owner_branch(repo, name)
+        if query != {'branch': [expected]} or source.query != 'branch=' + expected:
             raise ValueError(f'Invalid first-party source selector for {name}')
 
 
-def check_manifest(value):
+def check_manifest(value, alias=None):
     if isinstance(value, dict):
         if FIRST_PARTY.match(value.get('git', '')):
-            if value.get('branch') != 'main' or {'rev', 'tag'}.intersection(value):
-                raise ValueError('First-party dependency must declare branch = "main"')
-        for item in value.values():
-            check_manifest(item)
+            expected = owner_branch(value['git'], value.get('package', alias))
+            if value.get('branch') != expected or {'rev', 'tag'}.intersection(value):
+                raise ValueError(f'First-party dependency must declare branch = {expected}')
+        for key, item in value.items():
+            check_manifest(item, key)
     elif isinstance(value, list):
         for item in value:
             check_manifest(item)
@@ -66,6 +81,20 @@ def self_test():
                         {'git': repo, 'branch': 'main', 'tag': 'v1'}):
         rejects(check_manifest, {'target': {'cfg(wasm)': {'dependencies': {'alias': declaration}}}})
     check_manifest({'workspace': {'dependencies': {'alias': {'git': repo, 'package': 'example', 'branch': 'main'}}}})
+    for name, original in ORIGINAL.items():
+        retained = {'name': name, 'source': 'git+' + original + '?branch=v01#' + 'a' * 40}
+        check_lock([retained])
+        declaration = {'git': original, 'branch': 'v01'}
+        check_manifest({'dependencies': {name: declaration}})
+        check_manifest({'dependencies': {'alias': dict(declaration, package=name)}})
+        rejects(check_manifest, {'dependencies': {'alias': declaration}})
+        rejects(check_manifest, {'dependencies': {name: dict(declaration, branch='main')}})
+        rejects(check_lock, [dict(retained, name='foreign')])
+        rejects(check_lock, [dict(retained, source=retained['source'].replace('branch=v01', 'branch=other'))])
+        rejects(check_lock, [dict(retained, source=retained['source'].replace(original, original + '.git'))])
+        rejects(check_lock, [retained, dict(retained, source=retained['source'][:-1] + 'b')])
+        rejects(check_lock, [dict(retained, source=retained['source'].replace('branch=v01', 'branch=v01&branch=v01'))])
+
 
 
 if __name__ == '__main__':
@@ -78,4 +107,4 @@ if __name__ == '__main__':
                 check_manifest(tomllib.loads(path.read_text()))
             elif path.name == 'Cargo.lock':
                 check_lock(tomllib.loads(path.read_text())['package'])
-        print('First-party declarations follow main; locked crate revisions are unique')
+        print('First-party declarations follow approved owners; locked crate revisions are unique')
