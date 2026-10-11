@@ -16,7 +16,7 @@
     "evidence_packages": {
       "cpsd": {
         "version": "0.0.0",
-        "source": "git+https://git.corbet.ch/corbet-foss/cpsd?branch=main#da700af60d4f88a13ea9fb6b49c047505563befb"
+        "source": "git+https://git.corbet.ch/corbet-foss/cpsd?branch=main#3a9c9c13715313620ec8c1a1b8a1f6c8084e56c4"
       }
     }
   },
@@ -37,7 +37,7 @@
     "evidence_packages": {
       "cbcn": {
         "version": "0.1.0",
-        "source": "git+https://git.corbet.ch/corbet-foss/cbcn?branch=main#d374cf919ed79f576fda8ce83712d6d3eb3dfdba"
+        "source": "git+https://git.corbet.ch/corbet-foss/cbcn?branch=main#3ff7de1ccd1744440049bc63f502a3e0e4be2a8e"
       },
       "csgn": {
         "version": "0.0.0",

@@ -131,3 +131,11 @@ crate-private wallet instance token, wallet barrier and store visibility. The
 three defensive arms are unchanged and moved to lines 197, 732 and 822. Only the
 complete facade evidence hash and these line numbers were refreshed; no new line,
 branch, category or threshold is excluded.
+
+Dependency identity re-review (2026-10-11): the bound CPSD now locks 3a9c9c1
+and CBCN 3ff7de1. CPSD still gives `IssuerPublicKey` private fields with the
+read-only `gates()` accessor and no replacement API, so the line 197 argument
+holds. The CBCN change is additive (balance and root-board documents); the
+exact-bytes status cache and its sole `signed_status` installation path are
+unchanged, so the line 732 argument holds. The third arm needs no upstream
+package. No line, branch, category or threshold was added or broadened.
