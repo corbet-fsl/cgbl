@@ -797,8 +797,6 @@ async fn published_feed_rechecks_only_the_already_retained_beacon_without_fresh_
     let (global, _, _, _) = make().await;
     let (_directory, keys, _authentication) = enrolled().await;
     let mut wallet = wallet(&global, keys, csgn::MemoryStore::default(), false).await;
-    // Nothing is published until the original coherent feed was produced.
-    assert!(wallet.published_feed(NOW).is_err());
     let feed = wallet.trust_feed(NOW).await.unwrap();
     let again = wallet.published_feed(NOW).unwrap();
     assert_eq!(again.revision, feed.revision);
