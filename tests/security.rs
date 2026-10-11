@@ -1248,3 +1248,55 @@ async fn issuance_refuses_changed_pending_nonce_without_consuming_the_real_leaf_
         Err(Error::Challenge)
     ));
 }
+
+#[tokio::test]
+async fn read_only_eligibility_of_new_wallets_observes_original_permanent_suspension() {
+    let (global, store, _, _) = make().await;
+    let who = subject("provenance-wallet");
+    let key = storage::Key::new("account", who.as_str());
+    assert_eq!(
+        global.check_eligibility(&who, 100, &|| 100).await.unwrap(),
+        100
+    );
+    assert!(
+        !store
+            .read(std::slice::from_ref(&key))
+            .await
+            .unwrap()
+            .records
+            .contains_key(&key)
+    );
+    let calls = AtomicUsize::new(0);
+    assert_eq!(
+        global
+            .check_eligibility(
+                &who,
+                100,
+                &|| if calls.fetch_add(1, Ordering::SeqCst) == 0 {
+                    120
+                } else {
+                    115
+                }
+            )
+            .await,
+        Err(Error::InvalidTime)
+    );
+    global
+        .suspend(&who, Suspension::Permanent(PermanentReason::SelfBan), 121)
+        .await
+        .unwrap();
+    let before = store.read(std::slice::from_ref(&key)).await.unwrap();
+    assert_eq!(
+        global.check_eligibility(&who, 100, &|| 122).await,
+        Err(Error::Suspended)
+    );
+    assert_eq!(
+        global
+            .check_eligibility(&who, 100, &|| COHORT + 10 * DAY)
+            .await,
+        Err(Error::Suspended)
+    );
+    let after = store.read(std::slice::from_ref(&key)).await.unwrap();
+    assert_eq!(before.records[&key].value, after.records[&key].value);
+    assert_eq!(before.revisions[&key], after.revisions[&key]);
+}

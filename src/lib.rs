@@ -6,6 +6,7 @@ mod build_policy;
 pub mod contacts;
 #[cfg(all(feature = "development-gate", cgbl_development))]
 pub mod development;
+mod eligibility;
 mod facade;
 mod fingerprint;
 pub mod payments;
