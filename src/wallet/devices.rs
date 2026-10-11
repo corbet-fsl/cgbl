@@ -433,7 +433,7 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
             changes.push(row.change()?);
         }
         if !changes.is_empty() {
-            read.revisions.extend(retained.read.revisions);
+            read.revisions.extend(retained.read.revisions.clone());
             self.require_live()?;
             self.store.compare_exchange(&read, changes).await?;
         }

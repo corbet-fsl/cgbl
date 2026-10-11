@@ -53,7 +53,7 @@ pub struct Global<S, K, I> {
     pub(crate) wallet_instance: std::sync::Arc<()>,
     pub(crate) wallet_barrier: std::sync::Arc<crate::wallet::barrier::Barrier>,
     issuance: I,
-    store: S,
+    pub(crate) store: S,
     issuer: IssuerKey,
     signer: csgn::PersistentSigner<K>,
     fingerprints: FingerprintKey,
