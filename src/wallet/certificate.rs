@@ -78,7 +78,7 @@ impl Timing {
 }
 
 impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
-    pub(super) async fn wallet_account(&self, subject: &Subject, now: u64) -> Result<ReadSet> {
+    pub(super) async fn wallet_account(&self, subject: &Subject) -> Result<ReadSet> {
         let key = Key::new("account", subject.as_str());
         let read = self.read(vec![key.clone()]).await?;
         let account: Account = read
@@ -121,7 +121,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let retained = wallet.current().await?;
         timing.sample(wallet, clock())?;
         let subject = Subject::new(authentication.member().to_string())?;
-        let read = self.wallet_account(&subject, now).await?;
+        let read = self.wallet_account(&subject).await?;
         let mut registered = Registered {
             read,
             subject,
@@ -152,9 +152,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             .map_err(|_| Error::Storage)?
             .map_err(|_| Error::Signature)?;
         registered.timing.sample(wallet, clock())?;
-        let current = self
-            .wallet_account(&registered.subject, registered.timing.observed_at)
-            .await?;
+        let current = self.wallet_account(&registered.subject).await?;
         if current.revisions != registered.read.revisions {
             return Err(Error::Conflict);
         }

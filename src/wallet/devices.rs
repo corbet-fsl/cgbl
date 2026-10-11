@@ -132,7 +132,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let retained = wallet.current().await?;
         timing.sample(wallet, clock())?;
         let subject = Subject::new(auth.member().to_string())?;
-        let account = self.wallet_account(&subject, now).await?;
+        let account = self.wallet_account(&subject).await?;
         timing.sample(wallet, clock())?;
         let keys = wallet.passkeys.clone();
         let authentication = auth.clone();
@@ -198,7 +198,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let retained = wallet.current().await?;
         timing.sample(wallet, clock())?;
         let subject = Subject::new(auth.member().to_string())?;
-        let account = self.wallet_account(&subject, now).await?;
+        let account = self.wallet_account(&subject).await?;
         timing.sample(wallet, clock())?;
         let keys = wallet.passkeys.clone();
         let authentication = auth.clone();
@@ -215,7 +215,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let read = wallet.store.read(std::slice::from_ref(&key)).await?;
         timing.sample(wallet, clock())?;
         let row = decode(&read, &key)?;
-        let current = self.wallet_account(&subject, after_keys).await?;
+        let current = self.wallet_account(&subject).await?;
         if current.revisions != account.revisions {
             return Err(Error::Conflict);
         }
@@ -266,7 +266,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let retained = wallet.current().await?;
         timing.sample(wallet, clock())?;
         let subject = Subject::new(auth.member().to_string())?;
-        let account = self.wallet_account(&subject, now).await?;
+        let account = self.wallet_account(&subject).await?;
         timing.sample(wallet, clock())?;
         let keys = wallet.passkeys.clone();
         let authentication = auth.clone();
@@ -335,7 +335,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
 }
 
 impl<S: Store, K: csgn::Store> Wallet<S, K> {
-    pub(super) async fn reconcile_keys(&mut self, now: u64) -> Result<()> {
+    pub(super) async fn reconcile_keys(&mut self) -> Result<()> {
         let retained = self.current().await?;
         let mut revocations = cplc::Revocations::default();
         let mut pending = Vec::new();

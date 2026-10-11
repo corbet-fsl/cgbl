@@ -378,7 +378,6 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         state: &State,
         person: &Account,
         subject: &Subject,
-        now: u64,
     ) -> Result<PassportAttributes> {
         person.eligible()?;
         let mut attrs = PassportAttributes::new(state.policy.shared_expiry, state.epoch()?);
@@ -432,7 +431,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
                 return Err(Error::InvalidTime);
             }
             let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
-            self.attributes(&state, &person, subject, now)?;
+            self.attributes(&state, &person, subject)?;
             let previous: Option<Pending> = get(&read, &key)?;
             if previous.as_ref().is_some_and(|p| p.deadline >= now) {
                 return Err(Error::Capacity);
@@ -479,7 +478,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let read = self.read(vec![account(subject), key.clone()]).await?;
         let state = self.state(&read, now)?;
         let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
-        self.attributes(&state, &person, subject, now)?;
+        self.attributes(&state, &person, subject)?;
         let mut pending: Pending = get(&read, &key)?.ok_or(Error::Challenge)?;
         if pending.epoch != epoch
             || state.epoch()? != epoch
@@ -544,7 +543,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             return Err(Error::Challenge);
         }
         let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
-        let attributes = self.attributes(&state, &person, subject, now)?;
+        let attributes = self.attributes(&state, &person, subject)?;
         guard(PendingIssuanceDeadline {
             inclusive: pending.deadline,
         })?;

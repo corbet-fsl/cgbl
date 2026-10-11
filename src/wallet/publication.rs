@@ -249,7 +249,7 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
     pub async fn trust_feed(&mut self, now: u64) -> Result<Arc<cbcn::Feed>> {
         let _sdk = self.capture_sdk().await?;
         self.sample(now)?;
-        self.reconcile_keys(now).await?;
+        self.reconcile_keys().await?;
         self.key_ring()?;
         let retained = self.current().await?;
         let revision = retained.state.revision;
