@@ -791,3 +791,19 @@ async fn shutdown_or_global_drop_during_actual_sdk_work_refuses_its_durable_resu
         );
     }
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn published_feed_rechecks_only_the_already_retained_beacon_without_fresh_membership() {
+    let (global, _, _, _) = make().await;
+    let (_directory, keys, _authentication) = enrolled().await;
+    let mut wallet = wallet(&global, keys, csgn::MemoryStore::default(), false).await;
+    // Nothing is published until the original coherent feed was produced.
+    assert!(wallet.published_feed(NOW).is_err());
+    let feed = wallet.trust_feed(NOW).await.unwrap();
+    let again = wallet.published_feed(NOW).unwrap();
+    assert_eq!(again.revision, feed.revision);
+    assert_eq!(again.policy_epoch, feed.policy_epoch);
+    // Past every retained deadline the recheck refuses and drops the retained view.
+    assert!(wallet.published_feed(NOW + 10_000_000).is_err());
+    assert!(wallet.published_feed(NOW).is_err());
+}
