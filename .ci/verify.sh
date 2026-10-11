@@ -10,13 +10,20 @@ cargo fmt --all --check
 node --test .github/check-pins.test.mjs
 cargo metadata --locked --format-version 1 > dependency-metadata.json
 node .github/check-pins.mjs dependency-metadata.json
-cargo clippy --locked --all-targets -- -D warnings
-cargo clippy --locked --all-targets --all-features -- -D warnings
+# Invoke the selected original owner's existing shell; no environment is copied.
+keyhole_native_shell="$(python3 -B .ci/select-keyhole-native-shell.py dependency-metadata.json)"
+native_command() {
+  local original_command
+  printf -v original_command '%q ' "$@"
+  nix-shell "$keyhole_native_shell" --run "$original_command"
+}
+native_command cargo clippy --locked --all-targets -- -D warnings
+native_command cargo clippy --locked --all-targets --all-features -- -D warnings
 python3 -B .ci/test-issuance-deadline-control.py
-python3 -B .ci/issuance-deadline-control.py
-cargo test --locked -- --nocapture
-cargo test --locked --all-features -- --nocapture
-cargo test --locked --release --all-features
+native_command python3 -B .ci/issuance-deadline-control.py
+native_command cargo test --locked -- --nocapture
+native_command cargo test --locked --all-features -- --nocapture
+native_command cargo test --locked --release --all-features
 
 mkdir -p examples
 if [ -e examples/development_gate_probe.rs ]; then
@@ -26,7 +33,7 @@ fi
 cp .ci/development_gate_probe.rs examples/development_gate_probe.rs
 cleanup_probe() { rm -f examples/development_gate_probe.rs; }
 trap cleanup_probe EXIT
-if CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true cargo check --locked --release --all-features --example development_gate_probe > release-probe.log 2>&1; then
+if CARGO_PROFILE_RELEASE_DEBUG_ASSERTIONS=true native_command cargo check --locked --release --all-features --example development_gate_probe > release-probe.log 2>&1; then
   echo 'The development gate must not compile in release builds' >&2
   exit 1
 fi
@@ -60,7 +67,7 @@ trap 'rm -rf -- "$coverage_target"' EXIT
 export CARGO_TARGET_DIR="$coverage_target"
 printf 'coverage-setup pwd=%s coverage_target=%s\n' "$PWD" "$coverage_target"
 "$NIGHTLY_CARGO" llvm-cov --version
-"$NIGHTLY_CARGO" llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage --no-cfg-coverage-nightly --ignore-filename-regex '/tests/' --json --output-path coverage.json 2>&1
+native_command "$NIGHTLY_CARGO" llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage --no-cfg-coverage-nightly --ignore-filename-regex '/tests/' --json --output-path coverage.json 2>&1
 "$NIGHTLY_CARGO" llvm-cov report --locked --branch --ignore-filename-regex '/tests/' --lcov --output-path coverage.lcov 2>&1
 "$NIGHTLY_CARGO" llvm-cov report --locked --branch --ignore-filename-regex '/tests/' --text --output-path coverage.txt 2>&1
 cp coverage.json coverage.lcov coverage.txt "$ARTIFACT_ROOT/"
