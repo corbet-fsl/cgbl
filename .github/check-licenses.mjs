@@ -41,7 +41,33 @@ const allowed = new Set([
   "Zlib OR Apache-2.0 OR MIT"
 ]);
 const metadata = JSON.parse(readFileSync('dependency-metadata.json', 'utf8'));
-const rejected = metadata.packages.filter(p => !(p.name === "cgbl" && p.license === "FSL-1.1-ALv2") && !allowed.has(p.license));
+// These additions are confined to the reviewed packages and original sources.
+// Preserve upstream notices in docs/licenses; unknown versions need review.
+const registry = "registry+https://github.com/rust-lang/crates.io-index";
+const reviewed = new Map([
+  ["base64urlsafedata", ["0.5.5", "MPL-2.0"]],
+  ["webauthn-attestation-ca", ["0.5.5", "MPL-2.0"]],
+  ["webauthn-authenticator-rs", ["0.5.5", "MPL-2.0"]],
+  ["webauthn-rs", ["0.5.5", "MPL-2.0"]],
+  ["webauthn-rs-core", ["0.5.5", "MPL-2.0"]],
+  ["webauthn-rs-proto", ["0.5.5", "MPL-2.0"]],
+  ["blake3", ["1.8.7", "CC0-1.0 OR Apache-2.0 OR Apache-2.0 WITH LLVM-exception"]],
+  ["borrow-or-share", ["0.2.4", "MIT-0"]],
+  ["finl_unicode", ["1.5.0", "(MIT OR Apache-2.0) AND Unicode-DFS-2016"]],
+]);
+const owned = new Set(["cblc", "cgts", "cplc"]);
+function reviewedPackage(p) {
+  if (p.name === "cgbl" && p.source == null && p.license === "FSL-1.1-ALv2") return true;
+  if (owned.has(p.name) && p.version === "0.0.0" && p.license === "FSL-1.1-ALv2") {
+    const prefix = `git+https://git.corbet.ch/corbet-libs/${p.name}?branch=main#`;
+    return typeof p.source === "string" && p.source.startsWith(prefix)
+      && /^[0-9a-f]{40}$/.test(p.source.slice(prefix.length));
+  }
+  const entry = reviewed.get(p.name);
+  return p.source === registry && entry !== undefined
+    && p.version === entry[0] && p.license === entry[1];
+}
+const rejected = metadata.packages.filter(p => !allowed.has(p.license) && !reviewedPackage(p));
 for (const p of rejected) {
   console.error(`Unreviewed license: ${p.name} ${p.version}: ${p.license ?? 'missing'}`);
 }
