@@ -175,3 +175,61 @@ and provider binding. It receives no amount, currency, payment instrument or
 provider response. `PaymentGate` remains available for other explicitly selected
 financial facts. Production dispatch, cost authorization and local simulation
 remain inside cpmt/crpt; these gate adapters never contact payment providers.
+
+## Isolated wallet certificate and trust publisher
+
+The optional wallet publisher uses the original Keyhole registration certificate
+and the original csgn/CBCN five-document trust format. It does not reuse the
+`cgbl:global` passport issuer, community pseudonyms or a community policy. Wallet
+member IDs are the UUIDs from the actual literal-wallet authentication. Public
+revocation snapshots contain opaque passkey IDs and device keys, never those UUIDs.
+
+The host must explicitly provision a separate csgn signer with issuer `wallet`,
+its persistent signer store and secret key, and a `WalletPublicationConfig` with
+all of these fields: the actual wallet RP ID, its one exact HTTPS passkey origin,
+validated original rulebook, original wallet schema and complete schema history,
+an explicit public community directory, and a positive whole-day snapshot
+lifetime within that signer's validity limit. The Keyhole instance passed to
+`Global::open_wallet` must retain exactly that literal-wallet RP/origin. There is
+no discovered policy, key, origin or accepting unconfigured fallback. A private
+instance relation also prevents passing this publisher to another Global facade.
+Existing passport `GlobalPublic` and signed passport status remain separate.
+
+All signed documents, effective revocations and ring-transition proofs are
+retained through the original Store CAS before publication or transition
+acknowledgment. Document revisions survive key rotations. Device bindings join
+actual Account revisions and wallet publication state in the same CAS. The host
+must call `signal_wallet_key_mutation` before an additional-key, revoke or self-ban
+mutation, retain its original Auth/Global locks across that mutation, and publish
+before acknowledging it. Publication acknowledges only the exact observed
+pending generations and Account/device revisions; another generation refuses the
+old result. Reconciliation reads actual original Keyhole tombstones and Account
+eligibility. These local fences do not freeze independent remote writers.
+
+Certificate and device operations require the actual authenticated current key
+and that original grant's exclusive expiry. Each await is followed by a fresh
+clock check bounded by the original elapsed lifetime. Refusal, cancellation or
+uncertain CAS completion fences the live publisher; reopen the original stores
+to reconcile the durable winner. A host must still retain the exact original
+session, recheck the same grant/current key after awaits, and perform its final
+live-clock/ring check before returning HTTP bytes. A signed certificate or a
+device observation alone grants neither Create nor Use. Wallet custody requires
+the same original certified-lineage, forced network read and current HTTPS owner
+protocol as community custody. No initialized account, prover, G3 or Tor runtime
+acceptance is established by this producer.
+
+The exact live Global/Wallet/SDK instance also owns one mutation barrier. A
+private `WalletMutation` carries its original owned guard into the SAME blocking
+Keyhole worker. Cancelling the HTTP waiter cannot release that guard before the
+SDK work definitively finishes. Publication captures this barrier before its
+actual inventory and retains it through the original Beacon collect and
+publication acknowledgment; certificate/device reads use the same owner.
+`signal_wallet_key_mutation` requires that matching held permit and does not
+re-lock it. Pending outbox state is not evidence that SDK work completed.
+
+`WalletShutdown` synchronously fences new work, then waits for the original
+worker-held barrier. The host must invoke it after stopping request intake and
+await it within the original total shutdown budget before closing the database
+runtime. A timed-out or cancelled wait is not a joined worker. Across restart,
+a new live owner re-reads actual SDK rows and the durable generation rather than
+reconstructing the old worker or accepting a pending boolean.

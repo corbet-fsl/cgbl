@@ -1,4 +1,6 @@
 //! Production-mode policy, provider-idempotency and challenge-capacity regressions.
+#[path = "security/wallet.rs"]
+mod wallet_tests;
 use cgbl::{
     storage::{MemoryStore, Store},
     *,

@@ -50,6 +50,8 @@ pub struct Limits {
 /// Methods require already authenticated/authorized callers. One csgn writer
 /// owns publication. Concurrent identity operations are fenced by storage CAS.
 pub struct Global<S, K, I> {
+    pub(crate) wallet_instance: std::sync::Arc<()>,
+    pub(crate) wallet_barrier: std::sync::Arc<crate::wallet::barrier::Barrier>,
     issuance: I,
     store: S,
     issuer: IssuerKey,
@@ -127,6 +129,8 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             }
         }
         Ok(Self {
+            wallet_instance: std::sync::Arc::new(()),
+            wallet_barrier: std::sync::Arc::new(crate::wallet::barrier::Barrier::new()),
             issuance,
             store,
             issuer,

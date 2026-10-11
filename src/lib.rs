@@ -13,11 +13,16 @@ pub mod payments;
 mod self_ban_status;
 pub mod storage;
 mod types;
+mod wallet;
 /// Issuer protocol messages only. Holder APIs stay in the cpsd leaf.
 pub use cpsd::{BlindPassport, IssuanceChallenge, IssuanceRequest, IssuerPublicKey};
 pub use facade::{Global, Limits};
 pub use fingerprint::FingerprintKey;
 pub use types::*;
+pub use wallet::{
+    Wallet, WalletDeviceObservation, WalletMutation, WalletPasskeyCertificate,
+    WalletPublicationConfig, WalletShutdown,
+};
 
 /// Schemas for a NEW global database, in service-assigned migration order.
 /// Existing databases need an explicit identity-preserving upgrade; an old
