@@ -1267,7 +1267,7 @@ async fn read_only_eligibility_of_new_wallets_observes_original_permanent_suspen
             .contains_key(&key)
     );
     let calls = AtomicUsize::new(0);
-    assert_eq!(
+    assert!(matches!(
         global
             .check_eligibility(
                 &who,
@@ -1280,22 +1280,22 @@ async fn read_only_eligibility_of_new_wallets_observes_original_permanent_suspen
             )
             .await,
         Err(Error::InvalidTime)
-    );
+    ));
     global
         .suspend(&who, Suspension::Permanent(PermanentReason::SelfBan), 121)
         .await
         .unwrap();
     let before = store.read(std::slice::from_ref(&key)).await.unwrap();
-    assert_eq!(
+    assert!(matches!(
         global.check_eligibility(&who, 100, &|| 122).await,
         Err(Error::Suspended)
-    );
-    assert_eq!(
+    ));
+    assert!(matches!(
         global
             .check_eligibility(&who, 100, &|| COHORT + 10 * DAY)
             .await,
         Err(Error::Suspended)
-    );
+    ));
     let after = store.read(std::slice::from_ref(&key)).await.unwrap();
     assert_eq!(before.records[&key].value, after.records[&key].value);
     assert_eq!(before.revisions[&key], after.revisions[&key]);

@@ -27,7 +27,7 @@ async fn service() -> (Facade, MemoryStore) {
         vec![GateId::new("cphn").unwrap()],
     )
     .unwrap();
-    let mut facade = Global::open(
+    let facade = Global::open(
         store.clone(),
         cpsd::MemoryStore::new(cpsd::CommunityId::new(b"global").unwrap(), 10).unwrap(),
         issuer,
