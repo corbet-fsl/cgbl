@@ -65,7 +65,7 @@ Only these three native arms are excluded:
   replacement API. The exact CPSD source bound in the manifest gives its public
   key private fields and read-only catalogue access. The other reserved-provider
   arm is reachable and executed; it remains required.
-- `src/facade.rs:680`, block 0 arm 1: an issuer mismatch cannot arise from this
+- `src/facade.rs:728`, block 0 arm 1: an issuer mismatch cannot arise from this
   private cache. Its sole installation path is `signed_status`, which constructs
   `Status.issuer_public_key` from the immutable `self.binding.issuer`, signs that
   payload, and installs those exact bytes. The cache starts empty on every open;
@@ -75,7 +75,7 @@ Only these three native arms are excluded:
   payload bytes. Imported storage binding changes are refused by `read` before
   the cache path. Tests exercise policy-version rollback, changed shared expiry,
   valid cache reuse, actual signer invalidation and concurrent storage changes.
-- `src/facade.rs:770`, block 0 arm 0: a scope mismatch is impossible after the two
+- `src/facade.rs:818`, block 0 arm 0: a scope mismatch is impossible after the two
   preceding checks. The first requires `ring.issuer() == format!("cgbl:{scope}")`;
   `validate_publication` then requires that same issuer to equal the same literal
   prefix plus `value.scope`. Prefix concatenation is injective. The bound key-ring
@@ -102,9 +102,26 @@ diff from the previously recorded proof revisions. Their private fields,
 immutable accessors and authenticated exact-byte cache retain the invariants
 above. Only the recorded dependency identities changed; no exception was added.
 
-## Current measured result
+## Earlier measured result
 
 Crow 283/30 at `16f00aba` reported 1,199/1,199 production source lines and
 237/237 required branch arms. The raw branch result is 237/240 (98.75%);
 subtracting the three source-bound unreachable arms gives the enforced 100%.
 The older counts above describe the original invariant review, not current totals.
+
+
+Reviewed contact/self-ban integration refresh (2026-10-11): the exact original
+three defensive arms remain unchanged at lines 193, 728 and 818. The facade now
+has read-only contact authorization, original-account status/eligibility access,
+and permanent self-ban for a wallet before its first gate. These additions do
+not replace the private issuer binding, add a cache importer, or alter policy
+catalogue validation, signed_status construction, or scope-prefix validation.
+The same locked CPSD, Beacon and Signatures identities remain in this owner's
+Cargo.lock. Only the complete facade evidence hash and two relocated line
+numbers were refreshed; no new line, branch, category or threshold is excluded.
+
+Actual Crow 283/36 at 20205a56 passed 47 default native tests plus four doctests,
+and 64 development native tests plus four doctests. Coverage stopped at the
+stale source-evidence hash before validating the new coverage result. These
+native results do not establish current complete source coverage or browser
+qualification.
