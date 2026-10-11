@@ -104,7 +104,14 @@ def check(lcov, raw_json, root, annotated, target='native'):
         expected_counts = Counter(location[0] for location in locations)
         actual_counts = Counter(line for (path, line, _, _) in branches if path == current)
         if actual_counts != {line: 2 * count for line, count in expected_counts.items()}:
-            raise ValueError('Missing emitted branch locations')
+            differing = sorted(
+                line
+                for line in set(actual_counts) | set(expected_counts)
+                if actual_counts.get(line, 0) != 2 * expected_counts.get(line, 0)
+            )
+            raise ValueError(
+                f'Missing emitted branch locations in {current} at lines {differing[:20]}'
+            )
         for key, metric, field in [('LF', 'lines', 'count'), ('LH', 'lines', 'covered'),
                                   ('BRF', 'branches', 'count'), ('BRH', 'branches', 'covered')]:
             count = summary[metric][field]
