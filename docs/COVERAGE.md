@@ -58,14 +58,14 @@ no race, storage error, cryptographic error or resource failure is excluded.
 
 Only these three native arms are excluded:
 
-- `src/facade.rs:193`, block 0 arm 0: `gate.gate == "development"` cannot be true
+- `src/facade.rs:197`, block 0 arm 0: `gate.gate == "development"` cannot be true
   here in production mode. `Global::open` rejects any production issuer whose
   catalogue contains that gate. `install_policy` first rejects gates absent from
   the same catalogue at line 189. The issuer is a private, owned field with no
   replacement API. The exact CPSD source bound in the manifest gives its public
   key private fields and read-only catalogue access. The other reserved-provider
   arm is reachable and executed; it remains required.
-- `src/facade.rs:728`, block 0 arm 1: an issuer mismatch cannot arise from this
+- `src/facade.rs:732`, block 0 arm 1: an issuer mismatch cannot arise from this
   private cache. Its sole installation path is `signed_status`, which constructs
   `Status.issuer_public_key` from the immutable `self.binding.issuer`, signs that
   payload, and installs those exact bytes. The cache starts empty on every open;
@@ -75,7 +75,7 @@ Only these three native arms are excluded:
   payload bytes. Imported storage binding changes are refused by `read` before
   the cache path. Tests exercise policy-version rollback, changed shared expiry,
   valid cache reuse, actual signer invalidation and concurrent storage changes.
-- `src/facade.rs:818`, block 0 arm 0: a scope mismatch is impossible after the two
+- `src/facade.rs:822`, block 0 arm 0: a scope mismatch is impossible after the two
   preceding checks. The first requires `ring.issuer() == format!("cgbl:{scope}")`;
   `validate_publication` then requires that same issuer to equal the same literal
   prefix plus `value.scope`. Prefix concatenation is injective. The bound key-ring
@@ -125,3 +125,9 @@ and 64 development native tests plus four doctests. Coverage stopped at the
 stale source-evidence hash before validating the new coverage result. These
 native results do not establish current complete source coverage or browser
 qualification.
+
+Wallet publication-owner refresh (2026-10-11): the facade gained only the
+crate-private wallet instance token, wallet barrier and store visibility. The
+three defensive arms are unchanged and moved to lines 197, 732 and 822. Only the
+complete facade evidence hash and these line numbers were refreshed; no new line,
+branch, category or threshold is excluded.
