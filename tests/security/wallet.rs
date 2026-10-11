@@ -428,7 +428,7 @@ async fn actual_cas_cancellation_and_unknown_require_reopening_the_same_durable_
             .unwrap();
         reopened.trust_feed(NOW).await.unwrap();
         let key = storage::Key::new("wallet-device", auth.member().to_string());
-        let read = store.inner.read(&[key.clone()]).await.unwrap();
+        let read = store.inner.read(std::slice::from_ref(&key)).await.unwrap();
         let row: serde_json::Value = serde_json::from_slice(&read.records[&key].value).unwrap();
         assert_eq!(row["pending"], false);
     }
@@ -584,7 +584,10 @@ async fn dropped_global_cannot_rotate_or_reconcile_and_mutate_the_original_store
             .await
             .unwrap();
         let wallet_key = storage::Key::new("wallet", "publications");
-        let before = original.read(&[wallet_key.clone()]).await.unwrap();
+        let before = original
+            .read(std::slice::from_ref(&wallet_key))
+            .await
+            .unwrap();
         let signing_before = csgn::Store::load(&signer_store, "wallet").await.unwrap();
         drop(global);
         assert!(owner.key_ring().is_err());
@@ -605,7 +608,10 @@ async fn dropped_global_cannot_rotate_or_reconcile_and_mutate_the_original_store
             .unwrap();
             assert!(owner.trust_feed(NOW).await.is_err());
         }
-        let after = original.read(&[wallet_key.clone()]).await.unwrap();
+        let after = original
+            .read(std::slice::from_ref(&wallet_key))
+            .await
+            .unwrap();
         assert_eq!(after.revisions, before.revisions);
         assert_eq!(
             after.records[&wallet_key].value,
@@ -661,7 +667,7 @@ async fn cancelled_sdk_waiter_cannot_release_the_worker_barrier_or_acknowledge_e
                 .is_err()
         );
         let key = storage::Key::new("wallet-device", auth.member().to_string());
-        let read = original.read(&[key.clone()]).await.unwrap();
+        let read = original.read(std::slice::from_ref(&key)).await.unwrap();
         let row: serde_json::Value = serde_json::from_slice(&read.records[&key].value).unwrap();
         assert_eq!(row["pending"], true);
         release.send(()).unwrap();
@@ -682,7 +688,7 @@ async fn cancelled_sdk_waiter_cannot_release_the_worker_barrier_or_acknowledge_e
                 .passkeys
                 .contains(auth.credential_id().as_ref())
         );
-        let read = original.read(&[key.clone()]).await.unwrap();
+        let read = original.read(std::slice::from_ref(&key)).await.unwrap();
         let row: serde_json::Value = serde_json::from_slice(&read.records[&key].value).unwrap();
         assert_eq!(row["pending"], false);
     }
