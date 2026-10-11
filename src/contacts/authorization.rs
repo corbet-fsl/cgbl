@@ -15,18 +15,23 @@ pub struct ContactAuthorization {
     observed_at: u64,
 }
 impl ContactAuthorization {
+    /// Exact sealed subject/check/gate/provider binding observed by the owner.
     pub fn binding(&self) -> &ContactBinding {
         &self.binding
     }
+    /// Exclusive expiry from the actual configured policy cohort.
     pub fn fact_expires_at(&self) -> u64 {
         self.fact_expires_at
     }
+    /// Original global revocation epoch observed with the stored policy.
     pub fn epoch(&self) -> u64 {
         self.epoch
     }
+    /// Original enabled policy revision observed before dispatch.
     pub fn policy_revision(&self) -> u64 {
         self.policy_revision
     }
+    /// Exact trusted post-read time to retain as the next host clock floor.
     pub fn observed_at(&self) -> u64 {
         self.observed_at
     }

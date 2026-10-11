@@ -16,16 +16,20 @@ pub use authorization::ContactAuthorization;
 /// The actual leaf identity scheme whose stable comparison key is committed.
 #[derive(Clone, Copy)]
 pub enum ContactDomain {
+    /// Maintained cphn E.164 phone identity domain.
     Phone,
+    /// Maintained cmbx normalized mailbox identity domain.
     Mailbox,
 }
 impl ContactDomain {
+    /// Fixed leaf protocol identity domain for this contact kind.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Phone => "cphn.identity.v1:phone.e164",
             Self::Mailbox => "cmbx.identity.v1:mailbox.address",
         }
     }
+    /// Original global gate identifier for this contact kind.
     pub fn gate(self) -> &'static str {
         match self {
             Self::Phone => "cphn",
