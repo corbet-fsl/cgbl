@@ -92,9 +92,6 @@ pub enum Error {
     /// Account currently cannot obtain a passport.
     #[error("subject suspended")]
     Suspended,
-    /// Temporary suspension requires a preceding warning.
-    #[error("warning required")]
-    WarningRequired,
     /// Missing, expired, reused or incorrectly bound challenge.
     #[error("invalid challenge")]
     Challenge,

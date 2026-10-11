@@ -560,23 +560,24 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
         .await
         .unwrap();
     pending.finish(&blind).unwrap();
-    assert!(matches!(
-        global
-            .suspend(&alice, Suspension::Temporary { until: DAY }, 200)
-            .await,
-        Err(Error::WarningRequired)
-    ));
-    global.warn(&alice).await.unwrap();
     assert_eq!(
         global
-            .suspend(&alice, Suspension::Temporary { until: DAY }, 200)
+            .suspend(
+                &alice,
+                Suspension::Permanent(PermanentReason::LegalOrder),
+                200
+            )
             .await
             .unwrap(),
         2
     );
     assert_eq!(
         global
-            .suspend(&alice, Suspension::Temporary { until: DAY }, 200)
+            .suspend(
+                &alice,
+                Suspension::Permanent(PermanentReason::LegalOrder),
+                200
+            )
             .await
             .unwrap(),
         2
@@ -624,29 +625,20 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
         .await
         .unwrap();
     assert!(Status::verify(&signed, global.key_ring().unwrap(), &scope, 2, 1, 250).is_ok());
-    issue(&global, &mut rng, &alice, &secret, DAY).await;
-    assert!(global.revocations("", 10).await.unwrap().is_empty());
-    assert_eq!(
+    // A permanent record is never replaced or downgraded, not even by a self-ban.
+    assert!(matches!(
         global
             .suspend(
                 &alice,
                 Suspension::Permanent(PermanentReason::SelfBan),
                 DAY + 1
             )
-            .await
-            .unwrap(),
-        3
-    );
-    assert!(matches!(global.warn(&alice).await, Err(Error::Suspended)));
-    assert!(matches!(
-        global
-            .challenge(&mut rng, &session(&alice), DAY + 2, DAY + 12)
             .await,
         Err(Error::Suspended)
     ));
     assert!(matches!(
         global
-            .suspend(&alice, Suspension::Temporary { until: 2 * DAY }, DAY + 2)
+            .challenge(&mut rng, &session(&alice), DAY + 2, DAY + 12)
             .await,
         Err(Error::Suspended)
     ));
@@ -672,7 +664,7 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
             )
             .await
             .unwrap(),
-        4
+        3
     );
     assert_eq!(global.revocations("", 1).await.unwrap().len(), 1);
     assert_eq!(

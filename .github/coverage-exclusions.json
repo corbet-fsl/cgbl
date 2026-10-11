@@ -11,7 +11,7 @@
     "reason": "A production constructor rejects an issuer containing development; policy validation already requires every gate to be in that immutable issuer catalogue.",
     "evidence": "docs/COVERAGE.md#proposed-invariant-exceptions",
     "evidence_sources": {
-      "src/facade.rs": "2bfb219ae023c35a4b7f80bd4082ea1c4dcf6ce2c5c745029778a67e5eefea14"
+      "src/facade.rs": "d0c732aa75d1647b9c3940c63f0f2cbb882187c20a72a5e27372e4154e7e9d6d"
     },
     "evidence_packages": {
       "cpsd": {
@@ -22,7 +22,7 @@
   },
   {
     "file": "src/facade.rs",
-    "line": 732,
+    "line": 710,
     "source": "&& current.issuer_public_key == self.binding.issuer",
     "target": "native",
     "branch": {
@@ -32,7 +32,7 @@
     "reason": "The private cache is populated only by signed_status, which copies the immutable issuer binding into every signed payload; there is no caller cache import.",
     "evidence": "docs/COVERAGE.md#proposed-invariant-exceptions",
     "evidence_sources": {
-      "src/facade.rs": "2bfb219ae023c35a4b7f80bd4082ea1c4dcf6ce2c5c745029778a67e5eefea14"
+      "src/facade.rs": "d0c732aa75d1647b9c3940c63f0f2cbb882187c20a72a5e27372e4154e7e9d6d"
     },
     "evidence_packages": {
       "cbcn": {
@@ -47,7 +47,7 @@
   },
   {
     "file": "src/facade.rs",
-    "line": 822,
+    "line": 800,
     "source": "if value.scope != scope",
     "target": "native",
     "branch": {
@@ -57,7 +57,7 @@
     "reason": "The prior issuer check and validate_publication both bind the same immutable ring issuer to the same literal prefix plus scope.",
     "evidence": "docs/COVERAGE.md#proposed-invariant-exceptions",
     "evidence_sources": {
-      "src/facade.rs": "2bfb219ae023c35a4b7f80bd4082ea1c4dcf6ce2c5c745029778a67e5eefea14"
+      "src/facade.rs": "d0c732aa75d1647b9c3940c63f0f2cbb882187c20a72a5e27372e4154e7e9d6d"
     },
     "evidence_packages": {
       "csgn": {

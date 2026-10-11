@@ -81,7 +81,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             .map(|record| serde_json::from_slice(&record.value).map_err(|_| Error::Encoding))
             .transpose()?
             .unwrap_or_default();
-        account.eligible(now)?;
+        account.eligible()?;
         let fact_expires_at = state
             .policy
             .shared_expiry

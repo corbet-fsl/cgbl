@@ -68,8 +68,7 @@ secret from binding to a second person and bypassing a suspension.
 
 Retained gate expiries round DOWN to UTC days; rounding never extends evidence.
 Shared passport cohort expiry must be a day boundary. Eligibility requires every
-configured gate to reach that cohort. Temporary suspension ends must be day
-boundaries. csgn key activation/rotation, signed status issuance and status expiry
+configured gate to reach that cohort. csgn key activation/rotation, signed status issuance and status expiry
 use days. The signer must have been created with day-aligned activation.
 
 Issuance challenges retain seconds: their short deadline bounds proof replay and
@@ -99,8 +98,8 @@ by exactly one, starting at one. Effective passport epoch is authority epoch plu
 a separate local suspension counter. Policy acceptance never depends on the
 authority knowing that counter. Invalid large jumps cannot exhaust revocation.
 
-Temporary suspension requires a warning; permanent legal/self-ban suspension has
-no reversal API. Suspensions atomically update private state and the effective
+There is no operator suspension: only a verified legal order or the holder's
+self-ban suspends, permanently, with no reversal API. Suspensions atomically update private state and the effective
 epoch. cpsd cannot privately prove individual nonrevocation, so the new epoch
 invalidates the old global cohort once verifiers adopt it. Eligible people renew;
 suspended people cannot. cmty requires a fresh presentation at credential renewal,

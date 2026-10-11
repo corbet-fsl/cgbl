@@ -369,7 +369,7 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
                     })
                     .transpose()?
                     .unwrap_or_default();
-                let blocked = account.eligible(now).is_err();
+                let blocked = account.eligible().is_err();
                 revocations.devices.extend(row.removed);
                 for passkey in passkeys {
                     if passkey.community() != "wallet" || passkey.member() != member {

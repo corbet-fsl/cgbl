@@ -127,7 +127,6 @@ async fn permanent_self_ban_before_any_gate_creates_only_terminal_state_and_surv
             .await,
         Err(Error::Suspended)
     ));
-    assert!(matches!(reopened.warn(&who).await, Err(Error::Suspended)));
     assert!(matches!(
         reopened
             .suspend(
@@ -138,29 +137,20 @@ async fn permanent_self_ban_before_any_gate_creates_only_terminal_state_and_surv
             .await,
         Err(Error::Suspended)
     ));
-    assert!(matches!(
-        reopened
-            .suspend(&who, Suspension::Temporary { until: DAY }, 104)
-            .await,
-        Err(Error::Suspended)
-    ));
 }
 
 #[tokio::test]
-async fn missing_subject_still_refuses_legal_and_temporary_suspension_without_writing() {
+async fn missing_subject_still_refuses_legal_suspension_without_writing() {
     let (global, store, _, _) = make().await;
     let who = subject("unknown-non-self-ban");
-    for suspension in [
-        Suspension::Permanent(PermanentReason::LegalOrder),
-        Suspension::Temporary { until: DAY },
-    ] {
-        assert!(matches!(
-            global.suspend(&who, suspension, 101).await,
-            Err(Error::UnknownSubject)
-        ));
-    }
     assert!(matches!(
-        global.warn(&who).await,
+        global
+            .suspend(
+                &who,
+                Suspension::Permanent(PermanentReason::LegalOrder),
+                101
+            )
+            .await,
         Err(Error::UnknownSubject)
     ));
     assert!(
@@ -291,7 +281,6 @@ async fn slow_paid_check_survives_unrelated_writes_and_cancelled_delivery_withou
         .run_gate(&*provider, &subject("bob"), b"+200", 100, &check())
         .await
         .unwrap();
-    global.warn(&alice).await.unwrap();
     provider.release.notify_one();
     assert_eq!(task.await.unwrap().unwrap().valid_until, COHORT);
     assert_eq!(provider.calls.load(Ordering::SeqCst), 3);
@@ -392,10 +381,13 @@ async fn authority_policy_epoch_is_independent_of_suspensions_and_status_is_coar
             .await,
         Err(Error::Duplicate)
     ));
-    global.warn(&who).await.unwrap();
     assert_eq!(
         global
-            .suspend(&who, Suspension::Temporary { until: DAY }, 200)
+            .suspend(
+                &who,
+                Suspension::Permanent(PermanentReason::LegalOrder),
+                200
+            )
             .await
             .unwrap(),
         2
@@ -719,14 +711,6 @@ async fn operations_refuse_invalid_inputs_expired_policy_and_changed_storage_bin
             Err(Error::Capacity)
         ));
     }
-    for until in [100, DAY + 1] {
-        assert!(matches!(
-            global
-                .suspend(&subject("member"), Suspension::Temporary { until }, 100)
-                .await,
-            Err(Error::InvalidTime)
-        ));
-    }
     let mut rng = StdRng::seed_from_u64(77);
     assert!(matches!(
         global
@@ -760,7 +744,13 @@ async fn operations_refuse_invalid_inputs_expired_policy_and_changed_storage_bin
         .await
         .unwrap();
     assert!(matches!(
-        global.warn(&subject("member")).await,
+        global
+            .suspend(
+                &subject("member"),
+                Suspension::Permanent(PermanentReason::LegalOrder),
+                100
+            )
+            .await,
         Err(Error::KeyMismatch)
     ));
 }

@@ -133,21 +133,8 @@ pub enum PermanentReason {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Suspension {
-    /// Renewal becomes eligible again at this UTC-day boundary.
-    Temporary {
-        /// Exclusive end of the suspension.
-        until: u64,
-    },
     /// Irreversible through this API.
     Permanent(PermanentReason),
-}
-impl Suspension {
-    pub(crate) fn active(&self, now: u64) -> bool {
-        match self {
-            Self::Temporary { until } => now < *until,
-            Self::Permanent(_) => true,
-        }
-    }
 }
 /// Private administrative revocation entry. Never distribute to communities.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -195,12 +182,11 @@ pub(crate) struct Account {
     pub check_inputs: BTreeMap<String, String>,
     pub gates: BTreeMap<String, GateResult>,
     pub fingerprints: BTreeMap<String, String>,
-    pub warned: bool,
     pub suspension: Option<Suspension>,
 }
 impl Account {
-    pub(crate) fn eligible(&self, now: u64) -> Result<()> {
-        if self.suspension.as_ref().is_some_and(|s| s.active(now)) {
+    pub(crate) fn eligible(&self) -> Result<()> {
+        if self.suspension.is_some() {
             Err(Error::Suspended)
         } else {
             Ok(())

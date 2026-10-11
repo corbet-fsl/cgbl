@@ -272,7 +272,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             .find(|g| g.gate == gate.id() && g.provider == gate.provider())
             .ok_or(Error::GateDisabled)?;
         let existing: Account = get(&before, &account(subject))?.unwrap_or_default();
-        existing.eligible(now)?;
+        existing.eligible()?;
         let provider_check = self.fingerprints.check_id(
             self.store.scope(),
             subject,
@@ -332,7 +332,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
                 return Err(Error::GateDisabled);
             }
             let mut person: Account = get(&read, &account(subject))?.unwrap_or_default();
-            person.eligible(now)?;
+            person.eligible()?;
             let mut changes = vec![];
             if let (Some(value), Some(key)) = (&fingerprint, &fingerprint_key) {
                 if person
@@ -380,7 +380,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         subject: &Subject,
         now: u64,
     ) -> Result<PassportAttributes> {
-        person.eligible(now)?;
+        person.eligible()?;
         let mut attrs = PassportAttributes::new(state.policy.shared_expiry, state.epoch()?);
         for requirement in &state.policy.gates {
             let passed = person.gates.get(&requirement.gate).ok_or(Error::Gates)?;
@@ -592,18 +592,6 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         }
         Err(Error::Conflict)
     }
-    /// Record that the service delivered a warning; no time or message is stored.
-    pub async fn warn(&self, subject: &Subject) -> Result<()> {
-        let read = self.read(vec![account(subject)]).await?;
-        let mut person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
-        if matches!(person.suspension, Some(Suspension::Permanent(_))) {
-            return Err(Error::Suspended);
-        }
-        person.warned = true;
-        self.store
-            .compare_exchange(&read, vec![put(account(subject), &person)?])
-            .await
-    }
     /// Apply an authorized suspension and atomically advance the public epoch.
     /// Permanent records cannot be replaced or downgraded. Exact retries are idempotent.
     /// A host-authenticated self-ban may terminate a subject before its first
@@ -615,12 +603,6 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         now: u64,
     ) -> Result<u64> {
         time(now)?;
-        if let Suspension::Temporary { until } = &suspension {
-            time(*until)?;
-            if *until <= now || *until % 86_400 != 0 {
-                return Err(Error::InvalidTime);
-            }
-        }
         let read = self
             .read(vec![
                 account(subject),
@@ -642,13 +624,9 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         if matches!(person.suspension, Some(Suspension::Permanent(_))) {
             return Err(Error::Suspended);
         }
-        if matches!(suspension, Suspension::Temporary { .. }) && !person.warned {
-            return Err(Error::WarningRequired);
-        }
         state.local_epoch = state.local_epoch.checked_add(1).ok_or(Error::Exhausted)?;
         state.epoch()?;
         person.suspension = Some(suspension.clone());
-        person.warned = false;
         let revocation = Revocation {
             subject: subject.clone(),
             suspension,
