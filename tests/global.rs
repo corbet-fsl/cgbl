@@ -745,10 +745,6 @@ async fn short_evidence_bad_proofs_capacity_and_expiry() {
         .challenge(&mut rng, &session(&who), 100, 110)
         .await
         .unwrap();
-    assert!(matches!(
-        global.challenge(&mut rng, &session(&who), 100, 110).await,
-        Err(Error::Capacity)
-    ));
     let secret = HolderSecret::generate(&mut rng);
     let wrong_nonce = cpsd::IssuanceChallenge::generate(&mut rng);
     let (invalid, _) =

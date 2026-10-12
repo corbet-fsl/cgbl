@@ -404,7 +404,9 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             session.id,
         )
     }
-    /// Reserve one outstanding issuance per person, before invoking cpsd.
+    /// Reserve one outstanding issuance per person, before invoking cpsd. A retry
+    /// supersedes the outstanding challenge at once: the older one is refused at
+    /// issuance, and the person's pending slot is reused, never doubled.
     /// The short protocol deadline retains seconds to bound challenge replay and
     /// capacity. A cancelled request retains only this bounded pending slot.
     pub async fn challenge<R: RngCore + CryptoRng>(
@@ -433,9 +435,6 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
             self.attributes(&state, &person, subject)?;
             let previous: Option<Pending> = get(&read, &key)?;
-            if previous.as_ref().is_some_and(|p| p.deadline >= now) {
-                return Err(Error::Capacity);
-            }
             let count = count(&read)?;
             if previous.is_none() && count >= self.limits.pending_capacity {
                 return Err(Error::Capacity);

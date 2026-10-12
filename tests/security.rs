@@ -319,6 +319,57 @@ async fn slow_paid_check_survives_unrelated_writes_and_cancelled_delivery_withou
     assert_eq!(provider.calls.load(Ordering::SeqCst), before);
 }
 #[tokio::test]
+async fn a_retry_supersedes_the_outstanding_challenge_without_taking_another_slot() {
+    let (global, _, _, _) = make().await;
+    let provider = Provider::default();
+    let mut rng = StdRng::seed_from_u64(6);
+    for (name, input) in [("alice", b"+100"), ("bob", b"+200"), ("charlie", b"+300")] {
+        global
+            .run_gate(&provider, &subject(name), input, 100, &check())
+            .await
+            .unwrap();
+    }
+    let first = global
+        .challenge(&mut rng, &session("alice"), 100, 120)
+        .await
+        .unwrap();
+    // A retry inside the lifetime gets a fresh challenge, any number of times.
+    let mut latest = first.clone();
+    for _ in 0..5 {
+        latest = global
+            .challenge(&mut rng, &session("alice"), 101, 120)
+            .await
+            .unwrap();
+    }
+    // The retries held one slot: bob still fits, charlie is the third person.
+    global
+        .challenge(&mut rng, &session("bob"), 101, 120)
+        .await
+        .unwrap();
+    assert!(matches!(
+        global
+            .challenge(&mut rng, &session("charlie"), 101, 120)
+            .await,
+        Err(Error::Capacity)
+    ));
+    let secret = cpsd::HolderSecret::generate(&mut rng);
+    let (old_request, _) =
+        cpsd::request_issue(&mut rng, &secret, global.issuer_public_key(), &first).unwrap();
+    assert!(matches!(
+        global
+            .issue(&mut rng, &session("alice"), &first, &old_request, 102)
+            .await,
+        Err(Error::Challenge)
+    ));
+    let (request, pending) =
+        cpsd::request_issue(&mut rng, &secret, global.issuer_public_key(), &latest).unwrap();
+    let blind = global
+        .issue(&mut rng, &session("alice"), &latest, &request, 102)
+        .await
+        .unwrap();
+    pending.finish(&blind).unwrap();
+}
+#[tokio::test]
 async fn one_person_cannot_exhaust_global_challenges_and_sessions_cannot_swap() {
     let (global, _, _, _) = make().await;
     let provider = Provider::default();
@@ -333,14 +384,6 @@ async fn one_person_cannot_exhaust_global_challenges_and_sessions_cannot_swap() 
         .challenge(&mut rng, &session("alice"), 100, 120)
         .await
         .unwrap();
-    for _ in 0..5 {
-        assert!(matches!(
-            global
-                .challenge(&mut rng, &session("alice"), 100, 120)
-                .await,
-            Err(Error::Capacity)
-        ));
-    }
     global
         .challenge(&mut rng, &session("bob"), 100, 120)
         .await
