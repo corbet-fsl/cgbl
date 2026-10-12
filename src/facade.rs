@@ -424,6 +424,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let subject = &session.subject;
         let key = Key::new("challenge", subject.as_str());
         let mut epoch = None;
+        let mut superseded = None;
         for _ in 0..16 {
             let read = self
                 .read(vec![account(subject), key.clone(), meta("pending-count")])
@@ -455,6 +456,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             {
                 Ok(()) => {
                     epoch = Some(pending.epoch);
+                    superseded = previous.filter(|p| p.deadline >= now);
                     break;
                 }
                 Err(Error::Conflict) => continue,
@@ -462,6 +464,29 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             }
         }
         let epoch = epoch.ok_or(Error::Conflict)?;
+        // The superseded challenge is already unusable here (the pending record
+        // no longer names it); free its cpsd slot so retries never accumulate.
+        if let Some(Pending {
+            nonce: Some(nonce),
+            session: old_session,
+            ..
+        }) = superseded
+        {
+            let old = cpsd::AuthenticatedIssuance::new(
+                self.fingerprints
+                    .person_id(self.store.scope(), &session.subject),
+                old_session,
+            );
+            cpsd::revoke_issuance_challenge(
+                &self.issuance,
+                self.issuer.public_key(),
+                &old,
+                &cpsd::IssuanceChallenge::from_bytes(nonce),
+                now,
+            )
+            .await
+            .map_err(passport_error)?;
+        }
         // cpsd owns nonce storage, replay, person/session binding and continuity.
         // Pruning never releases its permanent holder-tag bindings.
         self.issuance.prune(now).await.map_err(passport_error)?;
