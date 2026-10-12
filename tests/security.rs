@@ -334,7 +334,7 @@ async fn a_retry_supersedes_the_outstanding_challenge_without_taking_another_slo
         .await
         .unwrap();
     // A retry inside the lifetime gets a fresh challenge, any number of times.
-    let mut latest = first.clone();
+    let mut latest = first;
     for _ in 0..5 {
         latest = global
             .challenge(&mut rng, &session("alice"), 101, 120)
