@@ -3,7 +3,7 @@ use super::*;
 use webauthn_authenticator_rs::{AuthenticatorBackend, softtoken::SoftToken};
 
 const RP: &str = "wallet.example.test";
-const ORIGIN: &str = "https://wallet.example.test";
+const ORIGIN: &str = "https://vault.wallet.example.test";
 const NOW: u64 = 100;
 type WalletOwner = Wallet<MemoryStore, csgn::MemoryStore>;
 
@@ -556,9 +556,28 @@ async fn configured_origin_foreign_facade_and_exclusive_issuance_deadline_refuse
             .is_err()
     );
     assert!(owner.key_ring().is_err());
+    // The bare wallet origin is no longer an accepted passkey origin.
+    let mut bare: serde_json::Value = serde_json::to_value(configuration()).unwrap();
+    bare["passkey_origin"] = "https://wallet.example.test/".into();
+    let bare = serde_json::from_value(bare).unwrap();
+    let signer = csgn::PersistentSigner::create(
+        csgn::MemoryStore::default(),
+        "wallet",
+        csgn::SecretKey::from_seed(&mut [47; 32]),
+        0,
+        30 * DAY,
+    )
+    .await
+    .unwrap();
+    assert!(
+        global
+            .open_wallet(signer, bare, keys.clone(), NOW)
+            .await
+            .is_err()
+    );
     let mut config: serde_json::Value = serde_json::to_value(configuration()).unwrap();
     config["rp_id"] = "wallet.other.example.test".into();
-    config["passkey_origin"] = "https://wallet.other.example.test/".into();
+    config["passkey_origin"] = "https://vault.wallet.other.example.test/".into();
     let config = serde_json::from_value(config).unwrap();
     let signer = csgn::PersistentSigner::create(
         csgn::MemoryStore::default(),

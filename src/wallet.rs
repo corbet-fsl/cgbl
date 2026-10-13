@@ -53,8 +53,11 @@ impl WalletPublicationConfig {
     }
     fn validate(&self) -> Result<()> {
         let origin = ckyh::Url::parse(&self.passkey_origin).map_err(|_| Error::Policy)?;
+        // Every passkey ceremony runs in the vault frame on the vault origin
+        // `vault.<rp_id>`; the relying party stays the wallet host.
+        let vault = format!("vault.{}", self.rp_id);
         if origin.scheme() != "https"
-            || origin.host_str() != Some(self.rp_id.as_str())
+            || origin.host_str() != Some(vault.as_str())
             || origin.path() != "/"
             || origin.query().is_some()
             || origin.fragment().is_some()
