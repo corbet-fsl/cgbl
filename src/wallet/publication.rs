@@ -224,6 +224,7 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
             schema_version: retained.state.config.schemas.current,
             balance_revision: None,
             root_board_revision: None,
+            ohttp: None,
         })
         .map_err(|_| Error::Encoding)?;
         let until = self.until(&retained.state, now)?;
