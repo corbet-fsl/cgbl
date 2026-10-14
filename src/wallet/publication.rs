@@ -178,7 +178,11 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
             ),
             SnapshotKind::Schema => serde_json::to_value(retained.state.config.schema()),
             SnapshotKind::SchemaVersions => serde_json::to_value(&retained.state.config.schemas),
-            SnapshotKind::Communities => serde_json::to_value(&retained.state.config.communities),
+            SnapshotKind::Communities => Ok(cplc::communities_content(
+                &retained.state.config.communities,
+                &retained.state.ended,
+                now,
+            )),
             SnapshotKind::RevocationList => serde_json::to_value(&retained.state.revocations),
         }
         .map_err(|_| Error::Encoding)?;
@@ -307,6 +311,33 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
         self.beacon
             .changes_since(revision, now)
             .map_err(|_| Error::Signature)
+    }
+    /// State that a community's key chain ended: the next Communities snapshot
+    /// carries the statement, so member devices that pin this fingerprint delete
+    /// their local data of it. Idempotent per fingerprint; statements older than
+    /// [`cplc::ENDED_RETENTION_SECONDS`] and beyond [`cplc::MAX_ENTRIES`] are
+    /// dropped (oldest first).
+    pub async fn end_chain(&mut self, entry: cplc::EndedChain, now: u64) -> Result<()> {
+        self.sample(now)?;
+        let retained = self.current().await?;
+        if retained
+            .state
+            .ended
+            .iter()
+            .any(|known| known.fingerprint == entry.fingerprint)
+        {
+            self.retained = Some(retained);
+            return Ok(());
+        }
+        let mut next = retained.state;
+        next.ended.retain(|known| {
+            known.ended_at.saturating_add(cplc::ENDED_RETENTION_SECONDS) > now
+        });
+        next.ended.push(entry);
+        next.ended.sort_by_key(|known| std::cmp::Reverse(known.ended_at));
+        next.ended.truncate(cplc::MAX_ENTRIES);
+        next.manifest = None;
+        self.commit(next, retained.read).await
     }
     /// Rotate only through the original signer and durable transition-before-ack.
     pub async fn rotate(&mut self, key: csgn::SecretKey, now: u64) -> Result<()> {
