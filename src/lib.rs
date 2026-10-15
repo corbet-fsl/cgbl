@@ -93,7 +93,7 @@ pub enum Error {
     UnknownSubject,
     /// Account currently cannot obtain a passport.
     #[error("subject blocked")]
-    Suspended,
+    Burned,
     /// Missing, expired, reused or incorrectly bound challenge.
     #[error("invalid challenge")]
     Challenge,

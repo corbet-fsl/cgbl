@@ -123,9 +123,9 @@ async fn terminal_pre_gate_self_ban_refuses_read_only_contact_authorization() {
     let subject = Subject::new("alice").unwrap();
     let check = CheckId::generate(&mut StdRng::seed_from_u64(2));
     facade
-        .suspend(
+        .burn(
             &subject,
-            Suspension::Permanent(PermanentReason::SelfBan),
+            Burn::Permanent(PermanentReason::SelfBan),
             100,
         )
         .await
@@ -134,7 +134,7 @@ async fn terminal_pre_gate_self_ban_refuses_read_only_contact_authorization() {
         facade
             .authorize_contact("cphn", "twilio", &subject, &check, &|| 100)
             .await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
     let other = Subject::new("bob").unwrap();
     assert!(

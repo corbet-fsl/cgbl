@@ -601,9 +601,9 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
                 delete(pending_key.clone()),
                 put(meta("pending-count"), &remaining)?,
             ];
-            if person.suspension.is_some() {
+            if person.burn.is_some() {
                 let mut cleared = person.clone();
-                cleared.suspension = None;
+                cleared.burn = None;
                 changes.push(delete(revocation_key.clone()));
                 changes.push(put(account(subject), &cleared)?);
             }
@@ -627,10 +627,10 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     /// Permanent records cannot be replaced or downgraded. Exact retries are idempotent.
     /// A host-authenticated self-ban may terminate a subject before its first
     /// successful gate. No gate or uniqueness fingerprint is invented for it.
-    pub async fn suspend(
+    pub async fn burn(
         &self,
         subject: &Subject,
-        suspension: Suspension,
+        burn: Burn,
         now: u64,
     ) -> Result<u64> {
         time(now)?;
@@ -644,23 +644,23 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let mut state: State = get(&read, &meta("state"))?.ok_or(Error::NoPolicy)?;
         let mut person: Account = match get(&read, &account(subject))? {
             Some(person) => person,
-            None if suspension == Suspension::Permanent(PermanentReason::SelfBan) => {
+            None if burn == Burn::Permanent(PermanentReason::SelfBan) => {
                 Account::default()
             }
             None => return Err(Error::UnknownSubject),
         };
-        if person.suspension.as_ref() == Some(&suspension) {
+        if person.burn.as_ref() == Some(&burn) {
             return state.epoch();
         }
-        if matches!(person.suspension, Some(Suspension::Permanent(_))) {
-            return Err(Error::Suspended);
+        if matches!(person.burn, Some(Burn::Permanent(_))) {
+            return Err(Error::Burned);
         }
         state.local_epoch = state.local_epoch.checked_add(1).ok_or(Error::Exhausted)?;
         state.epoch()?;
-        person.suspension = Some(suspension.clone());
+        person.burn = Some(burn.clone());
         let revocation = Revocation {
             subject: subject.clone(),
-            suspension,
+            burn,
         };
         self.store
             .compare_exchange(

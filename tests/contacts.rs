@@ -50,15 +50,15 @@ async fn self_ban_preserves_genuine_verified_gate_facts_and_burned_comparison_id
         serde_json::from_slice(&before.records[&account_key].value).unwrap();
     let fingerprints = store.list("fingerprint", "", 10).await.unwrap();
     assert_eq!(fingerprints.records.len(), 1);
-    let suspension = Suspension::Permanent(PermanentReason::SelfBan);
+    let burn = Burn::Permanent(PermanentReason::SelfBan);
     assert_eq!(
         global
-            .suspend(&alice, suspension.clone(), 101)
+            .burn(&alice, burn.clone(), 101)
             .await
             .unwrap(),
         2
     );
-    assert_eq!(global.suspend(&alice, suspension, 102).await.unwrap(), 2);
+    assert_eq!(global.burn(&alice, burn, 102).await.unwrap(), 2);
     let after = store
         .read(std::slice::from_ref(&account_key))
         .await
@@ -78,7 +78,7 @@ async fn self_ban_preserves_genuine_verified_gate_facts_and_burned_comparison_id
         global
             .run_gate(&phone, &alice, phone.input(), 103, &operation)
             .await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
     let replacement = subject("replacement-holder");
     let operation = check(81);

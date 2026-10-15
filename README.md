@@ -42,7 +42,7 @@ catalogue. No GPL/AGPL-only dependency is permitted.
   non-default `development-gate` feature, a development build and `Mode::Development`.
 - `challenge` and `issue` drive cpsd blind issuance. The holder uses cpsd
   `request_issue`, `PendingIssuance::finish`, and `PresentationRequest::for_epoch`.
-- `suspend` (legal order or self-ban only, permanent) and paginated private
+- `burn` (legal order or self-ban only, permanent) and paginated private
   `revocations` manage the current block state. `signed_status` publishes a COSE epoch view; `Status::verify` requires
   the consumer's trusted ring and epoch/revision minima.
 - `rotate_signing_key` delegates durable COSE rotation to csgn. `key_ring` and

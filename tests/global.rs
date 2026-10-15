@@ -562,9 +562,9 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
     pending.finish(&blind).unwrap();
     assert_eq!(
         global
-            .suspend(
+            .burn(
                 &alice,
-                Suspension::Permanent(PermanentReason::LegalOrder),
+                Burn::Permanent(PermanentReason::LegalOrder),
                 200
             )
             .await
@@ -573,9 +573,9 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
     );
     assert_eq!(
         global
-            .suspend(
+            .burn(
                 &alice,
-                Suspension::Permanent(PermanentReason::LegalOrder),
+                Burn::Permanent(PermanentReason::LegalOrder),
                 200
             )
             .await
@@ -584,13 +584,13 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
     );
     assert!(matches!(
         global.challenge(&mut rng, &session(&alice), 201, 211).await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
     assert!(matches!(
         global
             .run_gate(&gate, &alice, b"synthetic-unique-a", 201, &check())
             .await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
     let fresh_request = cpsd::PresentationRequest::for_epoch(
         &mut rng,
@@ -628,19 +628,19 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
     // A permanent record is never replaced or downgraded, not even by a self-ban.
     assert!(matches!(
         global
-            .suspend(
+            .burn(
                 &alice,
-                Suspension::Permanent(PermanentReason::SelfBan),
+                Burn::Permanent(PermanentReason::SelfBan),
                 DAY + 1
             )
             .await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
     assert!(matches!(
         global
             .challenge(&mut rng, &session(&alice), DAY + 2, DAY + 12)
             .await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
     let replacement = subject("synthetic-replacement");
     assert!(matches!(
@@ -657,9 +657,9 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
     ));
     assert_eq!(
         global
-            .suspend(
+            .burn(
                 &bob,
-                Suspension::Permanent(PermanentReason::LegalOrder),
+                Burn::Permanent(PermanentReason::LegalOrder),
                 DAY + 3
             )
             .await

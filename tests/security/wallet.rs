@@ -217,9 +217,9 @@ async fn actual_global_self_ban_and_key_tombstone_refuse_issuance_without_reviva
                 .unwrap();
         } else {
             global
-                .suspend(
+                .burn(
                     &subject(&authentication.member().to_string()),
-                    Suspension::Permanent(PermanentReason::SelfBan),
+                    Burn::Permanent(PermanentReason::SelfBan),
                     NOW,
                 )
                 .await

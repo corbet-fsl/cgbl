@@ -132,7 +132,7 @@ pub enum PermanentReason {
 /// Current block, without a history or free-text reason.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Suspension {
+pub enum Burn {
     /// Irreversible through this API.
     Permanent(PermanentReason),
 }
@@ -142,7 +142,7 @@ pub struct Revocation {
     /// Global identity, accessible only to the authenticated global service.
     pub subject: Subject,
     /// Current block.
-    pub suspension: Suspension,
+    pub burn: Burn,
 }
 /// Signed public view for authenticated epoch and issuer-key distribution.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -186,12 +186,12 @@ pub(crate) struct Account {
     pub check_inputs: BTreeMap<String, String>,
     pub gates: BTreeMap<String, GateResult>,
     pub fingerprints: BTreeMap<String, String>,
-    pub suspension: Option<Suspension>,
+    pub burn: Option<Burn>,
 }
 impl Account {
     pub(crate) fn eligible(&self) -> Result<()> {
-        if self.suspension.is_some() {
-            Err(Error::Suspended)
+        if self.burn.is_some() {
+            Err(Error::Burned)
         } else {
             Ok(())
         }

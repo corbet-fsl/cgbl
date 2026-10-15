@@ -80,14 +80,14 @@ async fn make() -> (Facade, MemoryStore, csgn::MemoryStore, cpsd::MemoryStore) {
 async fn permanent_self_ban_before_any_gate_creates_only_terminal_state_and_survives_reopening() {
     let (global, store, keys, issuance) = make().await;
     let who = subject("wallet-before-first-gate");
-    let suspension = Suspension::Permanent(PermanentReason::SelfBan);
+    let burn = Burn::Permanent(PermanentReason::SelfBan);
     assert!(!global.self_ban_status(&who).await.unwrap());
     assert_eq!(
-        global.suspend(&who, suspension.clone(), 101).await.unwrap(),
+        global.burn(&who, burn.clone(), 101).await.unwrap(),
         2
     );
     assert_eq!(
-        global.suspend(&who, suspension.clone(), 102).await.unwrap(),
+        global.burn(&who, burn.clone(), 102).await.unwrap(),
         2
     );
     let read = store
@@ -107,13 +107,13 @@ async fn permanent_self_ban_before_any_gate_creates_only_terminal_state_and_surv
     assert!(global.self_ban_status(&who).await.unwrap());
     let reopened = open(store, keys, issuance, true).await;
     assert!(reopened.self_ban_status(&who).await.unwrap());
-    assert_eq!(reopened.suspend(&who, suspension, 103).await.unwrap(), 2);
+    assert_eq!(reopened.burn(&who, burn, 103).await.unwrap(), 2);
     let provider = Provider::default();
     assert!(matches!(
         reopened
             .run_gate(&provider, &who, b"unverified-input", 103, &check())
             .await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
     assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
     assert!(matches!(
@@ -125,17 +125,17 @@ async fn permanent_self_ban_before_any_gate_creates_only_terminal_state_and_surv
                 113
             )
             .await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
     assert!(matches!(
         reopened
-            .suspend(
+            .burn(
                 &who,
-                Suspension::Permanent(PermanentReason::LegalOrder),
+                Burn::Permanent(PermanentReason::LegalOrder),
                 104
             )
             .await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
 }
 
@@ -145,9 +145,9 @@ async fn missing_subject_still_refuses_legal_block_without_writing() {
     let who = subject("unknown-non-self-ban");
     assert!(matches!(
         global
-            .suspend(
+            .burn(
                 &who,
-                Suspension::Permanent(PermanentReason::LegalOrder),
+                Burn::Permanent(PermanentReason::LegalOrder),
                 101
             )
             .await,
@@ -165,9 +165,9 @@ async fn missing_subject_still_refuses_legal_block_without_writing() {
     // A later genuine self-ban can still terminate this unverified account.
     assert_eq!(
         global
-            .suspend(
+            .burn(
                 &who,
-                Suspension::Permanent(PermanentReason::SelfBan),
+                Burn::Permanent(PermanentReason::SelfBan),
                 COHORT + 1
             )
             .await
@@ -426,9 +426,9 @@ async fn authority_policy_epoch_is_independent_of_blocks_and_status_is_coarse() 
     ));
     assert_eq!(
         global
-            .suspend(
+            .burn(
                 &who,
-                Suspension::Permanent(PermanentReason::LegalOrder),
+                Burn::Permanent(PermanentReason::LegalOrder),
                 200
             )
             .await
@@ -788,9 +788,9 @@ async fn operations_refuse_invalid_inputs_expired_policy_and_changed_storage_bin
         .unwrap();
     assert!(matches!(
         global
-            .suspend(
+            .burn(
                 &subject("member"),
-                Suspension::Permanent(PermanentReason::LegalOrder),
+                Burn::Permanent(PermanentReason::LegalOrder),
                 100
             )
             .await,
@@ -1317,19 +1317,19 @@ async fn read_only_eligibility_of_new_wallets_observes_original_permanent_block(
         Err(Error::InvalidTime)
     ));
     global
-        .suspend(&who, Suspension::Permanent(PermanentReason::SelfBan), 121)
+        .burn(&who, Burn::Permanent(PermanentReason::SelfBan), 121)
         .await
         .unwrap();
     let before = store.read(std::slice::from_ref(&key)).await.unwrap();
     assert!(matches!(
         global.check_eligibility(&who, 100, &|| 122).await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
     assert!(matches!(
         global
             .check_eligibility(&who, 100, &|| COHORT + 10 * DAY)
             .await,
-        Err(Error::Suspended)
+        Err(Error::Burned)
     ));
     let after = store.read(std::slice::from_ref(&key)).await.unwrap();
     assert_eq!(before.records[&key].value, after.records[&key].value);
