@@ -9,7 +9,7 @@ use cpsd::{
 use serde::{Serialize, de::DeserializeOwned};
 use std::collections::BTreeSet;
 
-fn meta(id: &str) -> Key {
+pub(crate) fn meta(id: &str) -> Key {
     Key::new("meta", id)
 }
 pub(crate) fn account(subject: &Subject) -> Key {
@@ -717,8 +717,15 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         if deadline <= now {
             return Err(Error::InvalidTime);
         }
-        let read = self.read(vec![]).await?;
+        let read = self.read(vec![crate::stamp::ring_key()]).await?;
         let state: State = get(&read, &meta("state"))?.ok_or(Error::NoPolicy)?;
+        let stamp_ring = crate::stamp::recorded_ring(&read)?;
+        let ring_current = crate::stamp::advance(
+            stamp_ring.clone(),
+            self.stamps.as_ref().map(|s| s.public_key_bytes()),
+            now,
+        )
+        .is_none();
         match self.beacon.current(now) {
             Ok(bytes) => {
                 let ring = self.key_ring()?;
@@ -741,9 +748,11 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
                     && current.issuer_public_key == self.binding.issuer
                     && current.stamp_public_key
                         == self.stamps.as_ref().map(|s| s.public_key_bytes())
+                    && ring_current
+                    && current.stamp_keys == stamp_ring
                     && lifetime
                 {
-                    let latest = self.read(vec![]).await?;
+                    let latest = self.read(vec![crate::stamp::ring_key()]).await?;
                     if latest.revisions != read.revisions {
                         return Err(Error::Conflict);
                     }
@@ -759,8 +768,10 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     /// Sign public epoch/status without exposing the private revocation list.
     pub async fn signed_status(&mut self, now: u64, valid_until: u64) -> Result<Vec<u8>> {
         time(now)?;
-        let read = self.read(vec![]).await?;
+        self.record_stamp_key(now).await?;
+        let read = self.read(vec![crate::stamp::ring_key()]).await?;
         let state: State = get(&read, &meta("state"))?.ok_or(Error::NoPolicy)?;
+        let stamp_keys = crate::stamp::recorded_ring(&read)?;
         let status = Status {
             version: 2,
             purpose: "global-passport-status".into(),
@@ -770,6 +781,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             shared_expiry: state.policy.shared_expiry,
             issuer_public_key: self.binding.issuer.clone(),
             stamp_public_key: self.stamp_public_key().map(|key| key.to_bytes()),
+            stamp_keys,
         };
         let payload = serde_json::to_vec(&status).map_err(|_| Error::Encoding)?;
         let signed = self
@@ -783,7 +795,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             .await
             .map_err(|_| Error::Signature)?;
         // Do not publish a snapshot superseded while its signing state committed.
-        let current = self.read(vec![]).await?;
+        let current = self.read(vec![crate::stamp::ring_key()]).await?;
         if current.revisions != read.revisions {
             return Err(Error::Conflict);
         }
@@ -849,6 +861,7 @@ impl Status {
         }
         time(self.shared_expiry)?;
         cpsd::IssuerPublicKey::from_bytes(&self.issuer_public_key).map_err(|_| Error::Encoding)?;
+        crate::stamp::validate_ring(self.stamp_public_key.as_deref(), &self.stamp_keys)?;
         Ok(())
     }
 }

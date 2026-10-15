@@ -6,8 +6,8 @@
 //! at most `StampRate::limit` times per period. The stamp key is a NEW key, never the passport
 //! key; its cohort is the rulebook's stamp cohort. The wallet sees no digest and no community.
 use crate::{
-    facade::{account, get, put},
-    storage::{Key, Store},
+    facade::{account, get, meta, put},
+    storage::{Key, ReadSet, Store},
     *,
 };
 use cpsd::{
@@ -91,7 +91,6 @@ impl<S: Store, K: csgn::Store, I> Global<S, K, I>
 where
     I: cpsd::IssuanceStore + cpsd::StampIssuanceStore + cpsd::PassportTags,
 {
-
     /// The authenticated issuance context: the member's person id, this session and the tag of
     /// the member's OWN passport, read from the passport issuer's registry.
     async fn stamp_holder(&self, session: &Session) -> Result<AuthenticatedStampIssuance> {
@@ -156,7 +155,9 @@ where
         time(now)?;
         let stamps = self.stamps.as_ref().ok_or(Error::NoPolicy)?;
         let subject = &session.subject;
-        let read = self.read(vec![account(subject), budget(subject)]).await?;
+        let read = self
+            .read(vec![account(subject), budget(subject), ring_key()])
+            .await?;
         let state = self.state(&read, now)?;
         let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
         person.eligible()?;
@@ -172,9 +173,12 @@ where
             return Err(Error::Capacity);
         }
         used.used += 1;
-        self.store
-            .compare_exchange(&read, vec![put(budget(subject), &used)?])
-            .await?;
+        let mut changes = vec![put(budget(subject), &used)?];
+        // The key that signs is recorded as open no later than its first stamp.
+        if let Some(ring) = advance(recorded_ring(&read)?, Some(stamps.public_key_bytes()), now) {
+            changes.push(put(ring_key(), &ring)?);
+        }
+        self.store.compare_exchange(&read, changes).await?;
         let holder = self
             .stamp_holder(session)
             .await?
@@ -200,6 +204,155 @@ where
     }
 }
 
+/// Store key of the recorded stamp key ring.
+pub(crate) fn ring_key() -> Key {
+    meta("stamp-keys")
+}
+
+/// The recorded ring in `read` (empty before the first stamp key).
+pub(crate) fn recorded_ring(read: &ReadSet) -> Result<Vec<StampKeyPeriod>> {
+    Ok(get(read, &ring_key())?.unwrap_or_default())
+}
+
+/// The ring after making `current` the open period at `now`: the previous open period is
+/// retired at `now` (or one second after its start), a new key opens at `now`. `None` when the
+/// ring already records `current` as open. Retired keys are never removed.
+pub(crate) fn advance(
+    mut ring: Vec<StampKeyPeriod>,
+    current: Option<Vec<u8>>,
+    now: u64,
+) -> Option<Vec<StampKeyPeriod>> {
+    let open = ring.iter().position(|period| period.valid_until.is_none());
+    if open.map(|i| Some(&ring[i].public_key)) == Some(current.as_ref())
+        || (open.is_none() && current.is_none())
+    {
+        return None;
+    }
+    if let Some(i) = open {
+        let from = ring[i].valid_from;
+        ring[i].valid_until = Some(now.max(from.saturating_add(1)));
+    }
+    if let Some(public_key) = current {
+        ring.push(StampKeyPeriod {
+            public_key,
+            valid_from: now,
+            valid_until: None,
+        });
+    }
+    Some(ring)
+}
+
+/// Publication rule: every key decodes, every period is non-empty, at most one is open and it
+/// is exactly `current`; without a current key no period is open.
+pub(crate) fn validate_ring(current: Option<&[u8]>, ring: &[StampKeyPeriod]) -> Result<()> {
+    let mut open = None;
+    for period in ring {
+        StampPublicKey::from_bytes(&period.public_key).map_err(|_| Error::Encoding)?;
+        match period.valid_until {
+            Some(until) if until <= period.valid_from => return Err(Error::Policy),
+            Some(_) => {}
+            None if open.is_some() => return Err(Error::Policy),
+            None => open = Some(period.public_key.as_slice()),
+        }
+    }
+    if open != current && !(open.is_none() && current.is_some() && ring.is_empty()) {
+        return Err(Error::Policy);
+    }
+    Ok(())
+}
+
+impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
+    /// Record the attached stamp key as the ring's open period (retiring the previous one).
+    pub(crate) async fn record_stamp_key(&self, now: u64) -> Result<()> {
+        time(now)?;
+        let read = self.read(vec![ring_key()]).await?;
+        let ring = recorded_ring(&read)?;
+        if let Some(ring) = advance(
+            ring,
+            self.stamps.as_ref().map(Stamps::public_key_bytes),
+            now,
+        ) {
+            self.store
+                .compare_exchange(&read, vec![put(ring_key(), &ring)?])
+                .await?;
+        }
+        Ok(())
+    }
+}
+
 fn window(now: u64, rate: StampRate) -> u64 {
     now / rate.period_seconds * rate.period_seconds
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cpsd::{KeyId, StampIssuerKey, StampParams, rand::rngs::OsRng};
+
+    fn key(name: &str) -> Vec<u8> {
+        StampIssuerKey::generate(
+            &mut OsRng,
+            KeyId::new(name).unwrap(),
+            &StampParams::new(86_400).unwrap(),
+        )
+        .unwrap()
+        .public_key()
+        .to_bytes()
+    }
+
+    fn period(key: &[u8], from: u64, until: Option<u64>) -> StampKeyPeriod {
+        StampKeyPeriod {
+            public_key: key.to_vec(),
+            valid_from: from,
+            valid_until: until,
+        }
+    }
+
+    #[test]
+    fn rotation_retires_the_open_key_and_keeps_every_retired_key() {
+        let (a, b) = (key("a"), key("b"));
+        assert_eq!(advance(vec![], None, 10), None);
+        let one = advance(vec![], Some(a.clone()), 10).unwrap();
+        assert_eq!(one, vec![period(&a, 10, None)]);
+        assert_eq!(advance(one.clone(), Some(a.clone()), 99), None);
+        let two = advance(one, Some(b.clone()), 50).unwrap();
+        assert_eq!(two, vec![period(&a, 10, Some(50)), period(&b, 50, None)]);
+        validate_ring(Some(&b), &two).unwrap();
+        // Rotating back to an old key opens a NEW period; the old one stays retired.
+        let three = advance(two, Some(a.clone()), 50).unwrap();
+        assert_eq!(
+            three,
+            vec![
+                period(&a, 10, Some(50)),
+                period(&b, 50, Some(51)),
+                period(&a, 50, None)
+            ]
+        );
+        validate_ring(Some(&a), &three).unwrap();
+        // Detaching stamps retires the open key.
+        let closed = advance(three, None, 60).unwrap();
+        assert!(closed.iter().all(|p| p.valid_until.is_some()));
+        validate_ring(None, &closed).unwrap();
+    }
+
+    #[test]
+    fn a_published_ring_has_one_open_period_equal_to_the_current_key() {
+        let (a, b) = (key("a"), key("b"));
+        validate_ring(None, &[]).unwrap();
+        // A status without a ring (no stamps recorded yet) stays valid.
+        validate_ring(Some(&a), &[]).unwrap();
+        for (current, ring) in [
+            (Some(&b), vec![period(&a, 1, None)]),
+            (None, vec![period(&a, 1, None)]),
+            (Some(&a), vec![period(&a, 1, Some(5))]),
+            (Some(&a), vec![period(&a, 1, None), period(&b, 2, None)]),
+            (Some(&a), vec![period(&b, 5, Some(5)), period(&a, 5, None)]),
+            (
+                Some(&a),
+                vec![period(&[1, 2, 3], 1, Some(2)), period(&a, 5, None)],
+            ),
+        ] {
+            assert!(validate_ring(current.map(Vec::as_slice), &ring).is_err());
+        }
+    }
 }

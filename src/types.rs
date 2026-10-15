@@ -166,6 +166,25 @@ pub struct Status {
     /// while the wallet issues no stamps. Stamps are verified at this status's epoch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stamp_public_key: Option<Vec<u8>>,
+    /// Every stamp key the wallet ever used, with its validity period, oldest first. Retired
+    /// keys stay so that genesis lineage evidence made before a rotation still verifies at its
+    /// receipt time. The open period (no `valid_until`) is `stamp_public_key`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub stamp_keys: Vec<StampKeyPeriod>,
+}
+
+/// One wallet stamp key and the period it signed stamps in: `valid_from` inclusive,
+/// `valid_until` exclusive and absent while the key is current.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StampKeyPeriod {
+    /// cpsd's stamp public-key encoding.
+    pub public_key: Vec<u8>,
+    /// First second the key may have signed a stamp.
+    pub valid_from: u64,
+    /// First second after the key's retirement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub valid_until: Option<u64>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct State {

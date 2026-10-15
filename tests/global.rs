@@ -1481,3 +1481,67 @@ async fn concurrent_issuance_consumes_once() {
     );
     pending.finish(&left.or(right).unwrap()).unwrap();
 }
+
+#[tokio::test]
+async fn the_signed_status_keeps_retired_stamp_keys_with_their_periods() {
+    let store = MemoryStore::new("global").unwrap();
+    let scope = store.scope().to_owned();
+    let mut global = make(
+        store,
+        csgn::MemoryStore::default(),
+        challenges("global", 20),
+        20,
+    )
+    .await;
+    let mut authority = authority().await;
+    install(&global, &mut authority, &policy(&scope, 1, 1, COHORT), 10)
+        .await
+        .unwrap();
+    let params = cpsd::StampParams::new(DAY).unwrap();
+    let mut rng = StdRng::seed_from_u64(7);
+    let first =
+        cpsd::StampIssuerKey::generate(&mut rng, KeyId::new("s1").unwrap(), &params).unwrap();
+    let second =
+        cpsd::StampIssuerKey::generate(&mut rng, KeyId::new("s2").unwrap(), &params).unwrap();
+    let a = first.public_key().to_bytes();
+    let b = second.public_key().to_bytes();
+    global.attach_stamps(first, StampRate::default()).unwrap();
+    let signed = global.signed_status(100, 2 * DAY).await.unwrap();
+    let status = Status::verify(&signed, global.key_ring().unwrap(), &scope, 1, 1, 150).unwrap();
+    assert_eq!(status.stamp_public_key.as_deref(), Some(a.as_slice()));
+    assert_eq!(status.stamp_keys.len(), 1);
+    assert_eq!(
+        (
+            status.stamp_keys[0].valid_from,
+            status.stamp_keys[0].valid_until
+        ),
+        (100, None)
+    );
+    // Unchanged: the published bytes are reused.
+    assert_eq!(global.public_status(150, 2 * DAY).await.unwrap(), signed);
+    // Rotation (published with the next policy revision: one status version never changes
+    // content): the old key stays in the ring, retired at the rotation.
+    global.attach_stamps(second, StampRate::default()).unwrap();
+    install(&global, &mut authority, &policy(&scope, 2, 2, COHORT), 180)
+        .await
+        .unwrap();
+    let rotated = global.public_status(200, 2 * DAY).await.unwrap();
+    assert_ne!(rotated, signed);
+    let status = Status::verify(&rotated, global.key_ring().unwrap(), &scope, 2, 2, 250).unwrap();
+    assert_eq!(status.stamp_public_key.as_deref(), Some(b.as_slice()));
+    assert_eq!(
+        status.stamp_keys,
+        vec![
+            StampKeyPeriod {
+                public_key: a,
+                valid_from: 100,
+                valid_until: Some(200)
+            },
+            StampKeyPeriod {
+                public_key: b,
+                valid_from: 200,
+                valid_until: None
+            },
+        ]
+    );
+}
