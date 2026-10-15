@@ -140,7 +140,7 @@ async fn permanent_self_ban_before_any_gate_creates_only_terminal_state_and_surv
 }
 
 #[tokio::test]
-async fn missing_subject_still_refuses_legal_suspension_without_writing() {
+async fn missing_subject_still_refuses_legal_block_without_writing() {
     let (global, store, _, _) = make().await;
     let who = subject("unknown-non-self-ban");
     assert!(matches!(
@@ -410,7 +410,7 @@ async fn one_person_cannot_exhaust_global_challenges_and_sessions_cannot_swap() 
         .unwrap();
 }
 #[tokio::test]
-async fn authority_policy_epoch_is_independent_of_suspensions_and_status_is_coarse() {
+async fn authority_policy_epoch_is_independent_of_blocks_and_status_is_coarse() {
     let (mut global, store, _, _) = make().await;
     let provider = Provider::default();
     let who = subject("alice");
@@ -1285,7 +1285,7 @@ async fn issuance_refuses_changed_pending_nonce_without_consuming_the_real_leaf_
 }
 
 #[tokio::test]
-async fn read_only_eligibility_of_new_wallets_observes_original_permanent_suspension() {
+async fn read_only_eligibility_of_new_wallets_observes_original_permanent_block() {
     let (global, store, _, _) = make().await;
     let who = subject("provenance-wallet");
     let key = storage::Key::new("account", who.as_str());

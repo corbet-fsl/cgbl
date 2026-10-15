@@ -6,7 +6,7 @@ use crate::{
 };
 
 /// Produced from an authenticated stored policy and the subject's current
-/// suspension. This is not a reservation or an engine-atomic currentness lease.
+/// block. This is not a reservation or an engine-atomic currentness lease.
 pub struct ContactAuthorization {
     binding: ContactBinding,
     fact_expires_at: u64,

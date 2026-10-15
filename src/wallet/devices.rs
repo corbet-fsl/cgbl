@@ -311,7 +311,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             row.generation = state::next(row.generation)?;
             row.pending = true;
             // Original account revisions join this exact mutation CAS. A
-            // concurrent suspension cannot become a successful new binding.
+            // concurrent block cannot become a successful new binding.
             read.revisions.extend(account.revisions);
             read.revisions.extend(retained.read.revisions);
             let mut next = retained.state;

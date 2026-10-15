@@ -9,7 +9,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     /// The host must derive this subject from a genuine original wallet grant.
     /// A wallet may exist before its first successful gate/Account record; only
     /// that authenticated original wallet permits interpreting absence as false.
-    /// This is not eligibility, a suspension list or authority to return.
+    /// This is not eligibility, a block list or authority to return.
     pub async fn self_ban_status(&self, subject: &Subject) -> Result<bool> {
         let key = Key::new("account", subject.as_str());
         let read = self.read(vec![key.clone()]).await?;

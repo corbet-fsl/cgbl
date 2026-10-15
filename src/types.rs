@@ -120,7 +120,7 @@ pub trait GlobalGate: Send + Sync {
         now: u64,
     ) -> impl Future<Output = Result<GateEvidence>> + Send;
 }
-/// Permanent suspension categories. Legal evidence stays outside this database.
+/// Permanent block categories. Legal evidence stays outside this database.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum PermanentReason {
@@ -129,7 +129,7 @@ pub enum PermanentReason {
     /// The service has authenticated the holder's self-ban request.
     SelfBan,
 }
-/// Current suspension, without a history or free-text reason.
+/// Current block, without a history or free-text reason.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Suspension {
@@ -141,7 +141,7 @@ pub enum Suspension {
 pub struct Revocation {
     /// Global identity, accessible only to the authenticated global service.
     pub subject: Subject,
-    /// Current suspension.
+    /// Current block.
     pub suspension: Suspension,
 }
 /// Signed public view for authenticated epoch and issuer-key distribution.
@@ -154,7 +154,7 @@ pub struct Status {
     pub purpose: String,
     /// Global scope.
     pub scope: String,
-    /// Effective epoch, including suspension bumps.
+    /// Effective epoch, including block bumps.
     pub epoch: u64,
     /// Authority's current policy revision.
     pub policy_revision: u64,

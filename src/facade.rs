@@ -615,7 +615,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         }
         Err(Error::Conflict)
     }
-    /// Apply an authorized suspension and atomically advance the public epoch.
+    /// Apply an authorized block and atomically advance the public epoch.
     /// Permanent records cannot be replaced or downgraded. Exact retries are idempotent.
     /// A host-authenticated self-ban may terminate a subject before its first
     /// successful gate. No gate or uniqueness fingerprint is invented for it.
@@ -632,7 +632,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
                 Key::new("revocation", subject.as_str()),
             ])
             .await?;
-        // Suspension still works when the previous passport policy has expired.
+        // A block still works when the previous passport policy has expired.
         let mut state: State = get(&read, &meta("state"))?.ok_or(Error::NoPolicy)?;
         let mut person: Account = match get(&read, &account(subject))? {
             Some(person) => person,
@@ -700,7 +700,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         Ok(size)
     }
     /// Reuse original signed public bytes while their owner version is current.
-    /// Private suspension lists remain in storage. The requested deadline must
+    /// Private block lists remain in storage. The requested deadline must
     /// remain future after the existing UTC-day rounding.
     pub async fn public_status(&mut self, now: u64, valid_until: u64) -> Result<Vec<u8>> {
         time(now)?;

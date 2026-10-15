@@ -1,4 +1,4 @@
-//! Global gates, unique identities, suspension and blind passports for cvld.
+//! Global gates, unique identities, permanent blocks and blind passports for cvld.
 //! Native service facade; see the README and implemented contract for its trust boundary.
 #![forbid(unsafe_code)]
 #[cfg(test)]
@@ -90,7 +90,7 @@ pub enum Error {
     #[error("unknown subject")]
     UnknownSubject,
     /// Account currently cannot obtain a passport.
-    #[error("subject suspended")]
+    #[error("subject blocked")]
     Suspended,
     /// Missing, expired, reused or incorrectly bound challenge.
     #[error("invalid challenge")]

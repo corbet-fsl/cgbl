@@ -1,4 +1,4 @@
-//! Read-only original account suspension check for a trusted wallet host.
+//! Read-only original account block check for a trusted wallet host.
 use crate::{
     Account, Error, Global, Result, Subject,
     storage::{Key, Store},

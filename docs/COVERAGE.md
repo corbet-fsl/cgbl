@@ -140,7 +140,6 @@ exact-bytes status cache and its sole `signed_status` installation path are
 unchanged, so the line 732 argument holds. The third arm needs no upstream
 package. No line, branch, category or threshold was added or broadened.
 
-Operator-suspension removal refresh (2026-10-11): the temporary suspension, warning
-flag and operator `warn` were deleted; only the legal-order and self-ban permanent
-suspensions remain. The three defensive arms are unchanged and moved to lines 197, 709, 799. Only the complete facade evidence hash and line numbers were refreshed;
+Block-model refresh (2026-10-11): only the legal-order and self-ban permanent
+blocks exist. The three defensive arms are unchanged and moved to lines 197, 709, 799. Only the complete facade evidence hash and line numbers were refreshed;
 no new line, branch, category or threshold is excluded.

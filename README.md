@@ -1,6 +1,6 @@
 # cgbl
 
-**Global facade of cvld: verifies a real, unique person once; global gates, uniqueness, suspension, passport issuance.**
+**Global facade of cvld: verifies a real, unique person once; global gates, uniqueness, permanent blocks, passport issuance.**
 
 Part of `cvld`, the permanent door of the cmtymeet trust stack. Status: in
 development; interfaces may change.
@@ -43,7 +43,7 @@ catalogue. No GPL/AGPL-only dependency is permitted.
 - `challenge` and `issue` drive cpsd blind issuance. The holder uses cpsd
   `request_issue`, `PendingIssuance::finish`, and `PresentationRequest::for_epoch`.
 - `suspend` (legal order or self-ban only, permanent) and paginated private
-  `revocations` manage current suspension state. `signed_status` publishes a COSE epoch view; `Status::verify` requires
+  `revocations` manage the current block state. `signed_status` publishes a COSE epoch view; `Status::verify` requires
   the consumer's trusted ring and epoch/revision minima.
 - `rotate_signing_key` delegates durable COSE rotation to csgn. `key_ring` and
   `issuer_public_key` expose only public material. `prune_challenges` releases
@@ -83,7 +83,7 @@ CI runs stable Rust formatting, Clippy with warnings denied, tests for
 both the production default and opt-in development gate, and resolved dependency
 license/pin checks. Real memory and local libSQL tests cover blind issuance and
 proofs, uniqueness/tag continuity, shared expiry, replay, malformed requests,
-suspension and epochs, COSE rotation, restart, conflicts, rollback, namespace
+blocks and epochs, COSE rotation, restart, conflicts, rollback, namespace
 isolation, query plans and pending-capacity cleanup. An independent HMAC vector
 checks framing and gate/scope separation. Cargo is never run on the workstation.
 
@@ -92,9 +92,8 @@ nonempty. It migrates a disposable database and cleans up synthetic rows. Never
 supply credentials in public CI or commit them. Local tests do not establish a
 live Turso result.
 
-Real global gate providers, service HTTP/MCP routing, wallet passkeys, warning
-transport, verified legal-order intake and freshness distribution are outside this
-library. cpsd has no private individual accumulator revocation yet: suspension
+Real global gate providers, service HTTP/MCP routing, wallet passkeys, transport, verified legal-order intake and freshness distribution are outside this
+library. cpsd has no private individual accumulator revocation yet: a block
 bumps the entire epoch and old passports fail once verifiers refresh. Public
 status deliberately contains no individual revocation entries. BBS issuer and
 HMAC-key rotation require a future explicit migration protocol; reopening with
@@ -108,7 +107,7 @@ isolate unrelated people, and provider APIs must guarantee idempotent billing.
 There is one pending challenge per person. Holder continuity belongs solely to
 cpsd. Uniqueness reservations and holder bindings are permanent: **NO RETURN**.
 
-Global policy authority epochs are independent of suspension bumps. Stored gate
+Global policy authority epochs are independent of block bumps. Stored gate
 expiries and status signatures use UTC days; short challenge deadlines retain
 seconds for replay/capacity bounds. Status is a purpose-bound SettingsSnapshot.
 The development gate is absent in release builds, including hardened builds.

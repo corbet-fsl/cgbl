@@ -60,11 +60,11 @@ Real phone/other providers remain separate integrations; no normalization is
 inferred from raw client input by the facade.
 
 **NO RETURN:** uniqueness fingerprints are burned forever. Gate expiry,
-registration expiry, holder-secret loss, passkey loss and suspension never release
+registration expiry, holder-secret loss, passkey loss and a block never release
 one. A person cannot switch an established uniqueness value. A holder who loses
 the secret cannot obtain a replacement identity or community pseudonym. There is
 no release, recovery or tombstone-reset API. cpsd also prevents the same holder
-secret from binding to a second person and bypassing a suspension.
+secret from binding to a second person and bypassing a block.
 
 Retained gate expiries round DOWN to UTC days; rounding never extends evidence.
 Shared passport cohort expiry must be a day boundary. Eligibility requires every
@@ -89,20 +89,20 @@ binding. The original `issue` delegates with a no-op callback. This seam bounds
 host output only when that host supplies a live guard; it does not enforce fresh
 time inside CPSD's atomic storage operation or undo a completed issuance.
 
-## Policy, suspension and publications
+## Policy, blocks and publications
 
 A separate authenticated global authority signs the typed `Policy` JSON as a
 csgn SettingsSnapshot; the service supplies its pinned ring. A community cplc
 signer never signs global policy. Revision increases and authority epoch advances
 by exactly one, starting at one. Effective passport epoch is authority epoch plus
-a separate local suspension counter. Policy acceptance never depends on the
+a separate local block counter. Policy acceptance never depends on the
 authority knowing that counter. Invalid large jumps cannot exhaust revocation.
 
-There is no operator suspension: only a verified legal order or the holder's
-self-ban suspends, permanently, with no reversal API. Suspensions atomically update private state and the effective
+Only a verified legal order or the holder's self-ban blocks a person, permanently,
+with no reversal API. A block atomically updates private state and the effective
 epoch. cpsd cannot privately prove individual nonrevocation, so the new epoch
 invalidates the old global cohort once verifiers adopt it. Eligible people renew;
-suspended people cannot. cmty requires a fresh presentation at credential renewal,
+blocked people cannot. cmty requires a fresh presentation at credential renewal,
 against the current authenticated global epoch. Offline credentials retain their
 bounded lifetime; this is not an offline revocation accumulator.
 
@@ -132,8 +132,8 @@ once at a full revision in the shared lock snapshot. Builds never run on the wor
 After the existing post-signing state recheck, `signed_status` installs original
 COSE bytes in `cbcn::document::Cache<Status>`. Existing Status payload validation
 is shared by the consumer verifier and the typed Beacon port. No community feed
-shape or private suspension list is published. The cache is volatile: durable
-policy floors and suspension epochs remain in the global store.
+shape or private block list is published. The cache is volatile: durable
+policy floors and block epochs remain in the global store.
 
 The cached path rechecks the durable state fence and requires the exact current
 policy revision, epoch, cohort and issuer key. It never accepts a deadline that
