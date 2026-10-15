@@ -12,16 +12,16 @@ use std::collections::BTreeSet;
 fn meta(id: &str) -> Key {
     Key::new("meta", id)
 }
-fn account(subject: &Subject) -> Key {
+pub(crate) fn account(subject: &Subject) -> Key {
     Key::new("account", subject.as_str())
 }
-fn get<T: DeserializeOwned>(read: &ReadSet, key: &Key) -> Result<Option<T>> {
+pub(crate) fn get<T: DeserializeOwned>(read: &ReadSet, key: &Key) -> Result<Option<T>> {
     read.records
         .get(key)
         .map(|r| serde_json::from_slice(&r.value).map_err(|_| Error::Encoding))
         .transpose()
 }
-fn put(key: Key, value: &impl Serialize) -> Result<Change> {
+pub(crate) fn put(key: Key, value: &impl Serialize) -> Result<Change> {
     Ok(Change {
         key,
         record: Some(Record {
@@ -52,7 +52,7 @@ pub struct Limits {
 pub struct Global<S, K, I> {
     pub(crate) wallet_instance: std::sync::Arc<()>,
     pub(crate) wallet_barrier: std::sync::Arc<crate::wallet::barrier::Barrier>,
-    issuance: I,
+    pub(crate) issuance: I,
     pub(crate) store: S,
     issuer: IssuerKey,
     signer: csgn::PersistentSigner<K>,
@@ -60,7 +60,9 @@ pub struct Global<S, K, I> {
     binding: Binding,
     beacon: cbcn::document::Cache<Status>,
     mode: Mode,
-    limits: Limits,
+    pub(crate) limits: Limits,
+    /// The wallet's confirmation-stamp key and budget (`attach_stamps`).
+    pub(crate) stamps: Option<crate::stamp::Stamps>,
 }
 impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     /// Open or initialize key bindings. Existing stores reject a changed HMAC
@@ -140,6 +142,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             beacon: cbcn::document::Cache::default(),
             mode,
             limits,
+            stamps: None,
         })
     }
     pub(crate) async fn read(&self, mut keys: Vec<Key>) -> Result<ReadSet> {
@@ -150,7 +153,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         }
         Ok(read)
     }
-    fn state(&self, read: &ReadSet, now: u64) -> Result<State> {
+    pub(crate) fn state(&self, read: &ReadSet, now: u64) -> Result<State> {
         time(now)?;
         let state: State = get(read, &meta("state"))?.ok_or(Error::NoPolicy)?;
         if state.policy.shared_expiry < now {
@@ -396,6 +399,11 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             );
         }
         Ok(attrs)
+    }
+    /// The stable opaque person id of the session's subject (passport tag registry key).
+    pub(crate) fn person_id(&self, session: &Session) -> [u8; 32] {
+        self.fingerprints
+            .person_id(self.store.scope(), &session.subject)
     }
     fn authenticated_issuance(&self, session: &Session) -> cpsd::AuthenticatedIssuance {
         cpsd::AuthenticatedIssuance::new(
@@ -731,6 +739,8 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
                     && current.policy_revision == state.policy.revision
                     && current.shared_expiry == state.policy.shared_expiry
                     && current.issuer_public_key == self.binding.issuer
+                    && current.stamp_public_key
+                        == self.stamps.as_ref().map(|s| s.public_key_bytes())
                     && lifetime
                 {
                     let latest = self.read(vec![]).await?;
@@ -759,6 +769,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             policy_revision: state.policy.revision,
             shared_expiry: state.policy.shared_expiry,
             issuer_public_key: self.binding.issuer.clone(),
+            stamp_public_key: self.stamp_public_key().map(|key| key.to_bytes()),
         };
         let payload = serde_json::to_vec(&status).map_err(|_| Error::Encoding)?;
         let signed = self

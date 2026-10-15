@@ -162,6 +162,10 @@ pub struct Status {
     pub shared_expiry: u64,
     /// cpsd's canonical public-key encoding; no holder identifiers.
     pub issuer_public_key: Vec<u8>,
+    /// The wallet's confirmation-stamp public key (cpsd encoding, cohort included); absent
+    /// while the wallet issues no stamps. Stamps are verified at this status's epoch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stamp_public_key: Option<Vec<u8>>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct State {

@@ -11,12 +11,14 @@ mod facade;
 mod fingerprint;
 pub mod payments;
 mod self_ban_status;
+mod stamp;
 pub mod storage;
 mod types;
 mod wallet;
 /// Issuer protocol messages only. Holder APIs stay in the cpsd leaf.
 pub use cpsd::{BlindPassport, IssuanceChallenge, IssuanceRequest, IssuerPublicKey};
 pub use facade::{Global, Limits};
+pub use stamp::StampRate;
 pub use fingerprint::FingerprintKey;
 pub use types::*;
 pub use wallet::{
