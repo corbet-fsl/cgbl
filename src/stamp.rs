@@ -25,6 +25,10 @@ pub struct StampRate {
     pub limit: u32,
     /// Window length in seconds.
     pub period_seconds: u64,
+    /// How long the wallet answers the SAME stamp request again with the SAME stamp, without
+    /// a new user verification and without another budget charge (a device that was killed
+    /// after the wallet replied and before it stored the stamp). 0 disables the replay.
+    pub replay_seconds: u64,
 }
 
 impl Default for StampRate {
@@ -33,6 +37,7 @@ impl Default for StampRate {
         Self {
             limit: 20,
             period_seconds: 86_400,
+            replay_seconds: 600,
         }
     }
 }
@@ -59,6 +64,26 @@ fn budget(subject: &Subject) -> Key {
     Key::new("stamps", subject.as_str())
 }
 
+/// The member's last issued stamp, kept for an exact replay of its request.
+#[derive(Serialize, Deserialize)]
+struct Reply {
+    /// SHA-256 of the issued request's bytes.
+    request: [u8; 32],
+    /// The blind stamp the wallet answered.
+    stamp: Vec<u8>,
+    /// Replays end here.
+    until: u64,
+}
+
+fn reply(subject: &Subject) -> Key {
+    Key::new("stamp-reply", subject.as_str())
+}
+
+fn request_digest(request: &StampIssuanceRequest) -> [u8; 32] {
+    use sha2::Digest as _;
+    sha2::Sha256::digest(request.to_bytes()).into()
+}
+
 fn stamp_error(error: cpsd::Error) -> Error {
     match error {
         cpsd::Error::IssuerTagMismatch | cpsd::Error::IssuerTagClaimed => Error::HolderChanged,
@@ -74,7 +99,11 @@ impl<S, K, I> Global<S, K, I> {
     /// Attach the wallet's stamp issuer key and the per-member budget. The key must not be
     /// the passport key's material and its cohort is the rulebook's stamp cohort.
     pub fn attach_stamps(&mut self, key: StampIssuerKey, rate: StampRate) -> Result<()> {
-        if rate.limit == 0 || rate.period_seconds == 0 || rate.period_seconds > 366 * 86_400 {
+        if rate.limit == 0
+        || rate.period_seconds == 0
+        || rate.period_seconds > 366 * 86_400
+        || rate.replay_seconds > 86_400
+    {
             return Err(Error::Capacity);
         }
         self.stamps = Some(Stamps { key, rate });
@@ -139,6 +168,36 @@ where
         Ok((challenge, stamps.key.public_key().clone()))
     }
 
+    /// The stamp this member was already issued for exactly `request` (same bytes) within the
+    /// replay window, or `None`. The host asks this BEFORE it verifies a user verification:
+    /// the same request gets the same answer with no new verification and no budget charge;
+    /// any other request needs its own confirmation.
+    pub async fn replay_stamp(
+        &self,
+        session: &Session,
+        request: &StampIssuanceRequest,
+        now: u64,
+    ) -> Result<Option<BlindStamp>> {
+        time(now)?;
+        let stamps = self.stamps.as_ref().ok_or(Error::NoPolicy)?;
+        if stamps.rate.replay_seconds == 0 {
+            return Ok(None);
+        }
+        let subject = &session.subject;
+        let read = self.read(vec![account(subject), reply(subject)]).await?;
+        self.state(&read, now)?;
+        let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
+        person.eligible()?;
+        match get::<Reply>(&read, &reply(subject))? {
+            Some(kept) if kept.request == request_digest(request) && now < kept.until => {
+                BlindStamp::from_bytes(&kept.stamp)
+                    .map(Some)
+                    .map_err(|_| Error::Encoding)
+            }
+            _ => Ok(None),
+        }
+    }
+
     /// Issue one blind stamp. `verified_confirmation` is the challenge of the fresh
     /// user-verifying wallet-passkey assertion the HOST verified for this session's member;
     /// issuance refuses unless it is exactly the request's confirmation challenge. The budget
@@ -183,7 +242,7 @@ where
             .stamp_holder(session)
             .await?
             .with_user_verification(verified_confirmation);
-        cpsd::issue_stamp_once(
+        let stamp = cpsd::issue_stamp_once(
             rng,
             &self.issuance,
             &stamps.key,
@@ -194,7 +253,21 @@ where
             now,
         )
         .await
-        .map_err(stamp_error)
+        .map_err(stamp_error)?;
+        // Kept before it is answered: a device killed after this reply and before it stored
+        // the stamp asks again with the same request and gets this same stamp.
+        if stamps.rate.replay_seconds > 0 {
+            let kept = Reply {
+                request: request_digest(request),
+                stamp: stamp.to_bytes(),
+                until: now.saturating_add(stamps.rate.replay_seconds),
+            };
+            let read = self.read(vec![reply(subject)]).await?;
+            self.store
+                .compare_exchange(&read, vec![put(reply(subject), &kept)?])
+                .await?;
+        }
+        Ok(stamp)
     }
 
     /// The stamp epoch communities verify against: the global epoch of the signed status.
