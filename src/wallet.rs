@@ -116,6 +116,50 @@ impl WalletPublicationConfig {
     }
 }
 
+/// The most ended chains one Communities snapshot lists; devices refuse a longer list.
+pub const MAX_ENDED: usize = 4096;
+
+/// Why a community's key chain ended (the wire names of the platform feed).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EndedReason {
+    /// The community's admins dissolved it.
+    Dissolved,
+    /// The platform ended it.
+    Banned,
+}
+
+/// One end-of-chain statement: no names, no member information.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EndedChain {
+    /// SHA-256 of the ended community's genesis document.
+    #[serde(with = "hex32")]
+    pub fingerprint: [u8; 32],
+    pub reason_class: EndedReason,
+    /// Unix seconds at which it ended.
+    pub ended_at: u64,
+}
+
+mod hex32 {
+    use serde::{Deserialize, Deserializer, Serializer, de::Error};
+    pub fn serialize<S: Serializer>(value: &[u8; 32], serializer: S) -> Result<S::Ok, S::Error> {
+        let text: String = value.iter().map(|byte| format!("{byte:02x}")).collect();
+        serializer.serialize_str(&text)
+    }
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<[u8; 32], D::Error> {
+        let text = String::deserialize(deserializer)?;
+        if text.len() != 64 || !text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            return Err(D::Error::custom("expected 64 lowercase hex characters"));
+        }
+        let mut out = [0u8; 32];
+        for (index, byte) in out.iter_mut().enumerate() {
+            *byte = u8::from_str_radix(&text[index * 2..index * 2 + 2], 16).map_err(D::Error::custom)?;
+        }
+        Ok(out)
+    }
+}
+
 /// Single configured wallet publisher. No root, passport issuer or arbitrary
 /// signing API escapes. Cancellation/storage uncertainty terminally fences this
 /// instance; reopen from the actual stores to reconcile the durable winner.

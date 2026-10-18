@@ -25,6 +25,9 @@ pub(super) struct State {
     pub transitions: Vec<cbcn::KeyTransition>,
     pub documents: BTreeMap<cplc::SnapshotKind, Signed>,
     pub manifest: Option<Signed>,
+    /// Chains the platform has ended, newest last; published in the Communities snapshot.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ended: Vec<super::EndedChain>,
 }
 impl State {
     pub fn validate(&self) -> Result<()> {
@@ -38,6 +41,14 @@ impl State {
             || self.epoch == 0
             || self.epoch > i64::MAX as u64
             || !self.revocations.members.is_empty()
+            || self.ended.len() > super::MAX_ENDED
+            || self
+                .ended
+                .iter()
+                .map(|entry| entry.fingerprint)
+                .collect::<BTreeSet<_>>()
+                .len()
+                != self.ended.len()
             || self.revocations.devices.len() > cplc::MAX_ENTRIES
             || self.revocations.passkeys.len() > cplc::MAX_ENTRIES
             || self
@@ -101,6 +112,7 @@ pub(super) async fn open(
                 transitions: Vec::new(),
                 documents: BTreeMap::new(),
                 manifest: None,
+                ended: Vec::new(),
             };
             state.validate()?;
             store.compare_exchange(&read, vec![change(&state)?]).await?;

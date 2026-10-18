@@ -824,3 +824,35 @@ async fn published_feed_rechecks_only_the_already_retained_beacon_without_fresh_
     assert!(wallet.published_feed(NOW + 10_000_000).is_err());
     assert!(wallet.published_feed(NOW).is_err());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_ended_chain_is_published_once_in_the_communities_snapshot() {
+    let (global, _, _, _) = make().await;
+    let (_directory, keys, _) = enrolled().await;
+    let mut wallet = wallet(&global, keys, csgn::MemoryStore::default(), false).await;
+    let ring = wallet.key_ring().unwrap().to_cbor();
+    let chain = cgbl::EndedChain {
+        fingerprint: [0xab; 32],
+        reason_class: cgbl::EndedReason::Banned,
+        ended_at: NOW,
+    };
+    wallet.record_ended(chain, NOW).await.unwrap();
+    // A repeat for the same fingerprint changes nothing and is not an error.
+    wallet.record_ended(chain, NOW).await.unwrap();
+    let feed = wallet.trust_feed(NOW).await.unwrap();
+    let mut charter = cchr::Charter::new(cchr::Configuration {
+        origin: ORIGIN.into(),
+        community: "wallet".into(),
+        key_ring: ring,
+        minimum_revision: 1,
+        ring_revision: 0,
+    })
+    .unwrap();
+    charter
+        .install(&serde_json::to_vec(&feed).unwrap(), NOW)
+        .unwrap();
+    let ended = charter.current(NOW).unwrap().ended().to_vec();
+    assert_eq!(ended.len(), 1);
+    assert_eq!(ended[0].fingerprint, [0xab; 32]);
+    assert_eq!(ended[0].ended_at, NOW);
+}

@@ -22,7 +22,7 @@ pub use stamp::StampRate;
 pub use fingerprint::FingerprintKey;
 pub use types::*;
 pub use wallet::{
-    Wallet, WalletDeviceObservation, WalletMutation, WalletPasskeyCertificate,
+    EndedChain, EndedReason, MAX_ENDED, Wallet, WalletDeviceObservation, WalletMutation, WalletPasskeyCertificate,
     WalletPublicationConfig, WalletShutdown,
 };
 

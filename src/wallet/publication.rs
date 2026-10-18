@@ -178,7 +178,13 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
             ),
             SnapshotKind::Schema => serde_json::to_value(retained.state.config.schema()),
             SnapshotKind::SchemaVersions => serde_json::to_value(&retained.state.config.schemas),
-            SnapshotKind::Communities => serde_json::to_value(&retained.state.config.communities),
+            SnapshotKind::Communities if retained.state.ended.is_empty() => {
+                serde_json::to_value(&retained.state.config.communities)
+            }
+            SnapshotKind::Communities => serde_json::to_value(serde_json::json!({
+                "communities": &retained.state.config.communities,
+                "ended": &retained.state.ended,
+            })),
             SnapshotKind::RevocationList => serde_json::to_value(&retained.state.revocations),
         }
         .map_err(|_| Error::Encoding)?;
@@ -307,6 +313,25 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
         self.beacon
             .changes_since(revision, now)
             .map_err(|_| Error::Signature)
+    }
+    /// Record one end-of-chain statement; the next trust feed lists it in the Communities
+    /// snapshot. A repeat for the same fingerprint changes nothing. When the list is full the
+    /// oldest statement is dropped (devices refuse longer lists).
+    pub async fn record_ended(&mut self, chain: EndedChain, now: u64) -> Result<()> {
+        self.sample(now)?;
+        self.key_ring()?;
+        let retained = self.current().await?;
+        if retained.state.ended.iter().any(|e| e.fingerprint == chain.fingerprint) {
+            self.retained = Some(retained);
+            return Ok(());
+        }
+        let mut next = retained.state;
+        if next.ended.len() >= MAX_ENDED {
+            next.ended.remove(0);
+        }
+        next.ended.push(chain);
+        next.manifest = None;
+        self.commit(next, retained.read).await
     }
     /// Rotate only through the original signer and durable transition-before-ack.
     pub async fn rotate(&mut self, key: csgn::SecretKey, now: u64) -> Result<()> {
