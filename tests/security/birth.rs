@@ -669,3 +669,114 @@ async fn birth_passport_and_birth_stamp_are_first_only_idempotent_and_race_once(
 fn session_subject() -> Subject {
     Subject::new(account()).unwrap()
 }
+
+/// Condition of the review: once any normal (assertion-confirmed) stamp exists for the account,
+/// no assertion-free stamp is possible, whatever the request; the normal path keeps working.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_normal_stamp_closes_the_birth_stamp_for_good() {
+    let (mut global, _, _, _) = make().await;
+    let mut rng = StdRng::seed_from_u64(41);
+    let stamp_key = cpsd::StampIssuerKey::generate(
+        &mut rng,
+        cpsd::KeyId::new("stamp").unwrap(),
+        &cpsd::StampParams::new(DAY).unwrap(),
+    )
+    .unwrap();
+    global
+        .attach_stamps(stamp_key, StampRate::default())
+        .unwrap();
+    let (_directory, keys, auth) = born().await;
+    let mut wallet = wallet(&global, keys, csgn::MemoryStore::default(), false).await;
+    let session = birth_session();
+    global
+        .run_gate(
+            &Provider::default(),
+            &session_subject(),
+            b"input",
+            100,
+            &check(),
+        )
+        .await
+        .unwrap();
+    global
+        .authorize_wallet_birth_device(
+            &mut wallet,
+            &auth,
+            device_key(PRF),
+            &bind_signature(PRF, &auth),
+            NOW + 60,
+            &|| NOW,
+        )
+        .await
+        .unwrap();
+    let mut holder = cpsd::OpaqueHolder::from_seed(&mut [62; 32]);
+    let challenge = global
+        .challenge(&mut rng, &session, 100, 150)
+        .await
+        .unwrap();
+    let request = holder
+        .begin_issuance(&mut rng, global.issuer_public_key(), &challenge)
+        .unwrap();
+    let signature = ckmg::passkey::sign_device_opened(
+        &prf(PRF),
+        "wallet",
+        ckmg::DevicePurpose::WalletBirthPassport,
+        &ckmg::wallet_birth_passport_payload(&request.to_bytes()),
+    )
+    .unwrap();
+    let passport = global
+        .issue_birth_passport(&mut rng, &session, &challenge, &request, &signature, 100)
+        .await
+        .unwrap();
+    holder.finish_issuance(&passport).unwrap();
+    let action = |seed: u8| {
+        (
+            cpsd::StampScope::new(
+                cpsd::CommunityId::new("community-1").unwrap(),
+                cpsd::CommunityFingerprint::from_bytes([1; 32]),
+            ),
+            cpsd::StampAction::new(
+                cpsd::ActionKind::new("lineage.pair").unwrap(),
+                cpsd::PayloadDigest::from_bytes([seed; 32]),
+                cpsd::StampSalt::generate(&mut StdRng::seed_from_u64(u64::from(seed))),
+            ),
+        )
+    };
+    // A normal stamp first (the host verified an assertion over the confirmation challenge).
+    let (nonce, stamp_public) = global
+        .stamp_challenge(&mut rng, &session, 100)
+        .await
+        .unwrap();
+    let normal = holder
+        .begin_stamp(&mut rng, &stamp_public, &nonce, &[action(1)], 100)
+        .unwrap();
+    let confirmation = normal.confirmation_challenge(&nonce);
+    let stamp = global
+        .issue_stamp(&mut rng, &session, &normal, &nonce, confirmation, 100)
+        .await
+        .unwrap();
+    holder.finish_stamp(&stamp, 100).unwrap();
+    // Every later assertion-free stamp is refused: another request and the very same one.
+    let (nonce, stamp_public) = global
+        .stamp_challenge(&mut rng, &session, 100)
+        .await
+        .unwrap();
+    let birth = holder
+        .begin_stamp(&mut rng, &stamp_public, &nonce, &[action(2)], 100)
+        .unwrap();
+    for request in [&birth, &normal] {
+        assert!(matches!(
+            global
+                .issue_birth_stamp(&mut rng, &session, request, &nonce, 100)
+                .await,
+            Err(Error::Duplicate)
+        ));
+    }
+    // The normal path is not affected by the closed item.
+    let confirmation = birth.confirmation_challenge(&nonce);
+    let next = global
+        .issue_stamp(&mut rng, &session, &birth, &nonce, confirmation, 100)
+        .await
+        .unwrap();
+    holder.finish_stamp(&next, 100).unwrap();
+}

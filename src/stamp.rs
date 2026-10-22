@@ -259,10 +259,14 @@ where
         let subject = &session.subject;
         let birth_key = Item::Stamp.key(subject);
         let birth_input = Item::Stamp.input(&[&request_digest(request)]);
-        let mut keys = vec![account(subject), budget(subject), ring_key()];
-        if birth {
-            keys.push(birth_key.clone());
-        }
+        // The birth item is read on EVERY path: a normal stamp closes it in its own
+        // compare-and-swap, so no assertion-free stamp follows any stamp of the account.
+        let keys = vec![
+            account(subject),
+            budget(subject),
+            ring_key(),
+            birth_key.clone(),
+        ];
         let read = self.read(keys).await?;
         let state = self.state(&read, now)?;
         if birth {
@@ -292,6 +296,8 @@ where
                 birth_input,
                 vec![],
             )?);
+        } else if let Some(closed) = crate::birth::close(&read, Item::Stamp, &birth_key)? {
+            changes.push(closed);
         }
         // The key that signs is recorded as open no later than its first stamp.
         if let Some(ring) = advance(recorded_ring(&read)?, Some(stamps.public_key_bytes()), now) {
