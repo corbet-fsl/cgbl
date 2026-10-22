@@ -19,6 +19,8 @@ cphn = { git = "https://git.corbet.ch/corbet-foss/cphn", branch = "main" }
 cmbx = { git = "https://git.corbet.ch/corbet-foss/cmbx", branch = "main" }
 cpmt = { git = "https://git.corbet.ch/corbet-foss/cpmt", branch = "main" }
 cbcn = { git = "https://git.corbet.ch/corbet-foss/cbcn", branch = "main" }
+cchr = { git = "https://git.corbet.ch/corbet-foss/cchr", branch = "main" }
+ckmg = { git = "https://git.corbet.ch/corbet-foss/ckmg", branch = "main" }
 ckyh = { git = "https://git.corbet.ch/corbet-foss/ckyh", branch = "main", features = ["certificate-signing"] }
 cplc = { git = "https://git.corbet.ch/corbet-libs/cplc", branch = "main" }
 crbk = { git = "https://git.corbet.ch/corbet-foss/crbk", branch = "main" }
@@ -35,8 +37,8 @@ tokio = { version = "1", features = ["rt", "sync"] }
 zeroize = "1.9"
 
 [dev-dependencies]
+blake3 = "1"
 csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", features = ["volatile-signer"] }
-cchr = { git = "https://git.corbet.ch/corbet-foss/cchr", branch = "v01" }
 webauthn-authenticator-rs = { version = "0.5.5", default-features = false, features = ["softtoken"] }
 cfbk = { git = "https://git.corbet.ch/corbet-foss/cfbk", branch = "main" }
 http = "1"
