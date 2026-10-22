@@ -6,10 +6,12 @@ use std::collections::BTreeSet;
 
 pub(crate) mod barrier;
 pub use barrier::{WalletMutation, WalletShutdown};
+mod birth;
 mod certificate;
 mod devices;
 mod publication;
 mod state;
+pub use birth::WalletBirthStatement;
 pub use certificate::WalletPasskeyCertificate;
 pub use devices::WalletDeviceObservation;
 use state::Retained;
