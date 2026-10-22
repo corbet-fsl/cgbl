@@ -106,6 +106,23 @@ pub(crate) fn check(read: &ReadSet, key: &Key, input: &[u8; 32]) -> Result<Open>
     })
 }
 
+/// Output of an item closed by the normal (assertion-confirmed) action.
+const CLOSED_OUTPUT: &[u8] = b"closed";
+
+/// The change that closes a still-unwritten item because the normal path ran first (a normal
+/// stamp before any birth stamp); `None` when the item is already written, by either path.
+/// The closing input is a domain-separated digest no birth request can produce, so any later
+/// birth request for the item is [`Error::Duplicate`]. The caller commits the change in the
+/// same compare-and-swap as its own action, with `key` in the read set.
+pub(crate) fn close(read: &ReadSet, item: Item, key: &Key) -> Result<Option<Change>> {
+    let input = item.input(&[b"closed-by-normal-path"]);
+    match check(read, key, &input) {
+        Ok(Open::Fresh) => change(key.clone(), input, CLOSED_OUTPUT.to_vec()).map(Some),
+        Ok(Open::Unfinished | Open::Done(_)) | Err(Error::Duplicate) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 /// The stored output of a completed item, whatever its input.
 pub(crate) fn completed(read: &ReadSet, key: &Key) -> Result<Option<Vec<u8>>> {
     Ok(get::<BirthItem>(read, key)?
