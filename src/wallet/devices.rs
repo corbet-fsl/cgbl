@@ -6,43 +6,26 @@ use crate::{
     storage::{Change, Key, ReadSet, Record},
 };
 
-pub(super) const BUCKET: &str = "wallet-device";
-/// Birth statement digests per account: exactly one is expected, a few leave room to detect more.
-pub(super) const MAX_BIRTHS: usize = 4;
+const BUCKET: &str = "wallet-device";
 const MAX_BINDINGS: usize = 128;
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Binding {
-    pub(super) credential: Vec<u8>,
-    pub(super) key: [u8; 32],
+struct Binding {
+    credential: Vec<u8>,
+    key: [u8; 32],
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct Devices {
-    pub(super) version: u8,
-    pub(super) member: String,
-    pub(super) generation: u64,
-    pub(super) pending: bool,
-    pub(super) bindings: Vec<Binding>,
-    pub(super) removed: BTreeSet<[u8; 32]>,
-    /// Digests of the wallet-signed birth statements of this account, in issue order
-    /// (`cchr::birth_statement_digest`). Absent in rows written before births existed.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub(super) births: Vec<[u8; 32]>,
+struct Devices {
+    version: u8,
+    member: String,
+    generation: u64,
+    pending: bool,
+    bindings: Vec<Binding>,
+    removed: BTreeSet<[u8; 32]>,
 }
 impl Devices {
-    pub(super) fn new(member: &str) -> Self {
-        Self {
-            version: 1,
-            member: member.into(),
-            generation: 1,
-            pending: false,
-            bindings: vec![],
-            removed: BTreeSet::new(),
-            births: vec![],
-        }
-    }
     fn validate(&self, key: &Key) -> Result<ckyh::Uuid> {
         let member = ckyh::Uuid::parse_str(&self.member).map_err(|_| Error::Encoding)?;
         if self.version != 1
@@ -53,8 +36,6 @@ impl Devices {
             || self.generation > i64::MAX as u64
             || self.bindings.len() > MAX_BINDINGS
             || self.removed.len() > cplc::MAX_ENTRIES
-            || self.births.len() > MAX_BIRTHS
-            || self.births.iter().collect::<BTreeSet<_>>().len() != self.births.len()
             || self.bindings.iter().any(|binding| {
                 binding.credential.is_empty()
                     || binding.credential.len() > 1024
@@ -68,7 +49,7 @@ impl Devices {
         }
         Ok(member)
     }
-    pub(super) fn change(&self) -> Result<Change> {
+    fn change(&self) -> Result<Change> {
         let key = Key::new(BUCKET, &self.member);
         self.validate(&key)?;
         let value = serde_json::to_vec(self).map_err(|_| Error::Encoding)?;
@@ -81,7 +62,7 @@ impl Devices {
         })
     }
 }
-pub(super) fn decode(read: &ReadSet, key: &Key) -> Result<Option<Devices>> {
+fn decode(read: &ReadSet, key: &Key) -> Result<Option<Devices>> {
     read.records
         .get(key)
         .map(|record| {
@@ -101,7 +82,6 @@ pub(super) fn decode(read: &ReadSet, key: &Key) -> Result<Option<Devices>> {
 pub struct WalletDeviceObservation {
     member: String,
     devices: Vec<[u8; 32]>,
-    births: Vec<[u8; 32]>,
     checked_at: u64,
 }
 impl WalletDeviceObservation {
@@ -113,11 +93,6 @@ impl WalletDeviceObservation {
     pub fn devices(&self) -> &[[u8; 32]] {
         &self.devices
     }
-    /// Digests of every wallet-signed birth statement of this account
-    /// (`cchr::birth_statement_digest`); exactly one is expected after a registration.
-    pub fn births(&self) -> &[[u8; 32]] {
-        &self.births
-    }
     /// Actual final owner observation, not a session deadline or cached verdict.
     pub fn checked_at(&self) -> u64 {
         self.checked_at
@@ -125,7 +100,7 @@ impl WalletDeviceObservation {
 }
 
 impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
-    pub(super) fn owns_wallet<W: csgn::Store>(
+    fn owns_wallet<W: csgn::Store>(
         &self,
         wallet: &Wallet<S, W>,
         auth: &ckyh::Authentication,
@@ -170,7 +145,14 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let key = Key::new(BUCKET, subject.as_str());
         let mut read = wallet.store.read(std::slice::from_ref(&key)).await?;
         timing.sample(wallet, clock())?;
-        let mut row = decode(&read, &key)?.unwrap_or(Devices::new(subject.as_str()));
+        let mut row = decode(&read, &key)?.unwrap_or(Devices {
+            version: 1,
+            member: subject.as_str().into(),
+            generation: 1,
+            pending: false,
+            bindings: vec![],
+            removed: BTreeSet::new(),
+        });
         row.generation = state::next(row.generation)?;
         row.pending = true;
         read.revisions.extend(account.revisions);
@@ -202,7 +184,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let _sdk = wallet.capture_sdk().await?;
         self.wallet_devices_held(wallet, auth, expires, clock).await
     }
-    pub(super) async fn wallet_devices_held<W: csgn::Store>(
+    async fn wallet_devices_held<W: csgn::Store>(
         &self,
         wallet: &mut Wallet<S, W>,
         auth: &ckyh::Authentication,
@@ -244,10 +226,6 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             .filter(|key| !key.is_revoked())
             .map(|key| key.credential_id().as_ref().to_vec())
             .collect();
-        let births = row
-            .as_ref()
-            .map(|row| row.births.clone())
-            .unwrap_or_default();
         let devices = row
             .map(|row| {
                 row.bindings
@@ -264,7 +242,6 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         Ok(WalletDeviceObservation {
             member: subject.as_str().into(),
             devices,
-            births,
             checked_at: completed,
         })
     }
@@ -302,7 +279,14 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let key = Key::new(BUCKET, subject.as_str());
         let mut read = wallet.store.read(std::slice::from_ref(&key)).await?;
         timing.sample(wallet, clock())?;
-        let mut row = decode(&read, &key)?.unwrap_or(Devices::new(subject.as_str()));
+        let mut row = decode(&read, &key)?.unwrap_or(Devices {
+            version: 1,
+            member: subject.as_str().into(),
+            generation: 1,
+            pending: false,
+            bindings: vec![],
+            removed: BTreeSet::new(),
+        });
         let credential = auth.credential_id().as_ref().to_vec();
         if !row
             .bindings

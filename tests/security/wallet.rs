@@ -1,8 +1,6 @@
 //! Genuine Global/Keyhole/signing/Beacon owners, never a member Authority fixture.
 use super::*;
 use webauthn_authenticator_rs::{AuthenticatorBackend, softtoken::SoftToken};
-#[path = "birth.rs"]
-mod birth;
 
 const RP: &str = "wallet.example.test";
 const ORIGIN: &str = "https://vault.wallet.example.test";

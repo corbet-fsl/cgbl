@@ -42,7 +42,7 @@ pub(super) struct Timing {
     began: Instant,
     lifetime: Duration,
     expires: u64,
-    pub(super) observed_at: u64,
+    observed_at: u64,
 }
 impl Timing {
     pub(super) fn new(now: u64, expires: u64) -> Result<Self> {

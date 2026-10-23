@@ -1,7 +1,6 @@
 //! Global gates, unique identities, permanent blocks and blind passports for cvld.
 //! Native service facade; see the README and implemented contract for its trust boundary.
 #![forbid(unsafe_code)]
-mod birth;
 #[cfg(test)]
 mod build_policy;
 pub mod contacts;
@@ -19,12 +18,12 @@ mod wallet;
 /// Issuer protocol messages only. Holder APIs stay in the cpsd leaf.
 pub use cpsd::{BlindPassport, IssuanceChallenge, IssuanceRequest, IssuerPublicKey};
 pub use facade::{Global, Limits};
-pub use fingerprint::FingerprintKey;
 pub use stamp::StampRate;
+pub use fingerprint::FingerprintKey;
 pub use types::*;
 pub use wallet::{
-    EndedChain, EndedReason, MAX_ENDED, Wallet, WalletBirthStatement, WalletDeviceObservation, WalletMutation,
-    WalletPasskeyCertificate, WalletPublicationConfig, WalletShutdown,
+    EndedChain, EndedReason, MAX_ENDED, Wallet, WalletDeviceObservation, WalletMutation, WalletPasskeyCertificate,
+    WalletPublicationConfig, WalletShutdown,
 };
 
 /// Schemas for a NEW global database, in service-assigned migration order.

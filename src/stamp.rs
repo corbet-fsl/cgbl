@@ -6,7 +6,6 @@
 //! at most `StampRate::limit` times per period. The stamp key is a NEW key, never the passport
 //! key; its cohort is the rulebook's stamp cohort. The wallet sees no digest and no community.
 use crate::{
-    birth::{Item, Open},
     facade::{account, get, meta, put},
     storage::{Key, ReadSet, Store},
     *,
@@ -101,10 +100,10 @@ impl<S, K, I> Global<S, K, I> {
     /// the passport key's material and its cohort is the rulebook's stamp cohort.
     pub fn attach_stamps(&mut self, key: StampIssuerKey, rate: StampRate) -> Result<()> {
         if rate.limit == 0
-            || rate.period_seconds == 0
-            || rate.period_seconds > 366 * 86_400
-            || rate.replay_seconds > 86_400
-        {
+        || rate.period_seconds == 0
+        || rate.period_seconds > 366 * 86_400
+        || rate.replay_seconds > 86_400
+    {
             return Err(Error::Capacity);
         }
         self.stamps = Some(Stamps { key, rate });
@@ -212,68 +211,13 @@ where
         verified_confirmation: [u8; 32],
         now: u64,
     ) -> Result<BlindStamp> {
-        self.issue_stamp_with(
-            rng,
-            session,
-            request,
-            challenge,
-            verified_confirmation,
-            false,
-            now,
-        )
-        .await
-    }
-
-    /// Issue the account's FIRST stamp without a passkey assertion, under the host-checked
-    /// birth grant of the one-ceremony registration (C5). The stamp is byte-identical to any
-    /// other: the confirmation is the request's own confirmation challenge, and budget, nonce
-    /// and holder binding are unchanged. The `stamp` birth item is written in the same
-    /// compare-and-swap as the budget charge; the same request returns the same stamp, another
-    /// request is [`Error::Duplicate`].
-    pub async fn issue_birth_stamp<R: RngCore + CryptoRng>(
-        &self,
-        rng: &mut R,
-        session: &Session,
-        request: &StampIssuanceRequest,
-        challenge: &IssuanceChallenge,
-        now: u64,
-    ) -> Result<BlindStamp> {
-        let confirmation = request.confirmation_challenge(challenge);
-        self.issue_stamp_with(rng, session, request, challenge, confirmation, true, now)
-            .await
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    async fn issue_stamp_with<R: RngCore + CryptoRng>(
-        &self,
-        rng: &mut R,
-        session: &Session,
-        request: &StampIssuanceRequest,
-        challenge: &IssuanceChallenge,
-        verified_confirmation: [u8; 32],
-        birth: bool,
-        now: u64,
-    ) -> Result<BlindStamp> {
         time(now)?;
         let stamps = self.stamps.as_ref().ok_or(Error::NoPolicy)?;
         let subject = &session.subject;
-        let birth_key = Item::Stamp.key(subject);
-        let birth_input = Item::Stamp.input(&[&request_digest(request)]);
-        // The birth item is read on EVERY path: a normal stamp closes it in its own
-        // compare-and-swap, so no assertion-free stamp follows any stamp of the account.
-        let keys = vec![
-            account(subject),
-            budget(subject),
-            ring_key(),
-            birth_key.clone(),
-        ];
-        let read = self.read(keys).await?;
+        let read = self
+            .read(vec![account(subject), budget(subject), ring_key()])
+            .await?;
         let state = self.state(&read, now)?;
-        if birth {
-            if let Open::Done(stored) = crate::birth::check(&read, &birth_key, &birth_input)? {
-                return BlindStamp::from_bytes(&stored).map_err(|_| Error::Encoding);
-            }
-        }
         let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
         person.eligible()?;
         let current = window(now, stamps.rate);
@@ -289,16 +233,6 @@ where
         }
         used.used += 1;
         let mut changes = vec![put(budget(subject), &used)?];
-        // The first-only marker commits with the budget charge, or not at all.
-        if birth {
-            changes.push(crate::birth::change(
-                birth_key.clone(),
-                birth_input,
-                vec![],
-            )?);
-        } else if let Some(closed) = crate::birth::close(&read, Item::Stamp, &birth_key)? {
-            changes.push(closed);
-        }
         // The key that signs is recorded as open no later than its first stamp.
         if let Some(ring) = advance(recorded_ring(&read)?, Some(stamps.public_key_bytes()), now) {
             changes.push(put(ring_key(), &ring)?);
@@ -332,9 +266,6 @@ where
             self.store
                 .compare_exchange(&read, vec![put(reply(subject), &kept)?])
                 .await?;
-        }
-        if birth {
-            crate::birth::finish(&self.store, birth_key, birth_input, stamp.to_bytes()).await?;
         }
         Ok(stamp)
     }
