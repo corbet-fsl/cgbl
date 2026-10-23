@@ -85,7 +85,7 @@ license/pin checks. Real memory and local libSQL tests cover blind issuance and
 proofs, uniqueness/tag continuity, shared expiry, replay, malformed requests,
 blocks and epochs, COSE rotation, restart, conflicts, rollback, namespace
 isolation, query plans and pending-capacity cleanup. An independent HMAC vector
-checks framing and gate/scope separation. Cargo is never run on the workstation.
+checks framing and gate/scope separation.
 
 `optional_real_turso` prints a skip unless both `TURSO_URL` and `TURSO_TOKEN` are
 nonempty. It migrates a disposable database and cleans up synthetic rows. Never

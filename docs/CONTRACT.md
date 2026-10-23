@@ -125,7 +125,7 @@ contains no development gate implementation.
 GitHub Actions runs format, Clippy, real memory/libSQL/crypto tests, release tests,
 a hardened-release negative compilation probe, dependency-license review and the
 shared duplicate/floating-revision check. Every first-party dependency follows main and must resolve
-once at a full revision in the shared lock snapshot. Builds never run on the workstation.
+once at a full revision in the shared lock snapshot.
 
 ## Shared Beacon cache
 
