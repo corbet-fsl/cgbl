@@ -167,7 +167,7 @@ pub(crate) async fn finish(
 impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     /// Issue the account's birth passport during the one-ceremony registration (Q5). Exactly
     /// like [`Global::issue`], and additionally bound to the account's birth device `K`:
-    /// `signature` is `sig_K` over [`ckmg::DevicePurpose::WalletBirthPassport`] and
+    /// `signature` is `sig_K` over [`ckmg::DeviceFormat::WalletBirthPassport`] and
     /// [`ckmg::wallet_birth_passport_payload`] of `request`. The birth item is written before
     /// the issue; the same request returns the same passport, another request is
     /// [`Error::Duplicate`]. Without a bound birth device this refuses with
@@ -194,7 +194,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             .and_then(|key| key.try_into().ok())
             .ok_or(Error::Encoding)?;
         let payload = ckmg::wallet_birth_passport_payload(&request.to_bytes());
-        let message = [ckmg::DevicePurpose::WalletBirthPassport.tag(), &payload[..]].concat();
+        let message = [ckmg::DeviceFormat::WalletBirthPassport.tag(), &payload[..]].concat();
         ckmg::verify_ed25519(&device, &message, signature).map_err(|_| Error::Signature)?;
         let input = Item::Passport.input(&[&payload]);
         match check(&read, &item_key, &input)? {

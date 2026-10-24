@@ -91,7 +91,7 @@ fn signed_origin(config: &WalletPublicationConfig) -> Result<String> {
 impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     /// Bind the account's FIRST wallet device `device` (= `K`) without a step-up, during the
     /// one-ceremony registration (C3). `signature` is `sig_K` over
-    /// [`ckmg::DevicePurpose::WalletBirthDevice`] and [`ckmg::wallet_birth_device_payload`]
+    /// [`ckmg::DeviceFormat::WalletBirthDevice`] and [`ckmg::wallet_birth_device_payload`]
     /// of (wallet origin, account, credential id, `c`, `K`), where `c` is the creation
     /// commitment the wallet retained for this credential and the origin is the configured
     /// passkey origin's ASCII serialization. Refused unless the credential is the account's
@@ -134,7 +134,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             &device,
         )
         .map_err(|_| Error::Encoding)?;
-        let message = [ckmg::DevicePurpose::WalletBirthDevice.tag(), &payload[..]].concat();
+        let message = [ckmg::DeviceFormat::WalletBirthDevice.tag(), &payload[..]].concat();
         ckmg::verify_ed25519(&device, &message, signature).map_err(|_| Error::Signature)?;
         let input = Item::Device.input(&[&payload]);
         let retained = wallet.current().await?;

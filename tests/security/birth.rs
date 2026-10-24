@@ -26,7 +26,7 @@ fn origin() -> String {
 }
 fn device_signature(
     seed: [u8; 32],
-    purpose: ckmg::DevicePurpose,
+    purpose: ckmg::DeviceFormat,
     origin: &str,
     auth: &ckyh::Authentication,
     commitment: [u8; 32],
@@ -39,12 +39,18 @@ fn device_signature(
         &device_key(seed),
     )
     .unwrap();
-    ckmg::passkey::sign_device_opened(&prf(seed), "wallet", purpose, &payload).unwrap()
+    match purpose {
+        // The opening signs the session format too, under another tag.
+        ckmg::DeviceFormat::DeviceSession => {
+            ckmg::passkey::sign_device_session(&prf(seed), "wallet", &payload).unwrap()
+        }
+        _ => ckmg::passkey::sign_device_birth(&prf(seed), "wallet", purpose, &payload).unwrap(),
+    }
 }
 fn bind_signature(seed: [u8; 32], auth: &ckyh::Authentication) -> [u8; 64] {
     device_signature(
         seed,
-        ckmg::DevicePurpose::WalletBirthDevice,
+        ckmg::DeviceFormat::WalletBirthDevice,
         &origin(),
         auth,
         COMMITMENT,
@@ -182,35 +188,35 @@ async fn birth_device_is_first_only_idempotent_and_bound_to_its_exact_fields() {
     let wrong = [
         device_signature(
             PRF,
-            ckmg::DevicePurpose::DeviceSession,
+            ckmg::DeviceFormat::DeviceSession,
             &origin(),
             &auth,
             COMMITMENT,
         ),
         device_signature(
             PRF,
-            ckmg::DevicePurpose::WalletBirthPassport,
+            ckmg::DeviceFormat::WalletBirthPassport,
             &origin(),
             &auth,
             COMMITMENT,
         ),
         device_signature(
             PRF,
-            ckmg::DevicePurpose::WalletBirthDevice,
+            ckmg::DeviceFormat::WalletBirthDevice,
             "https://vault.other.test",
             &auth,
             COMMITMENT,
         ),
         device_signature(
             PRF,
-            ckmg::DevicePurpose::WalletBirthDevice,
+            ckmg::DeviceFormat::WalletBirthDevice,
             &format!("{ORIGIN}/"),
             &auth,
             COMMITMENT,
         ),
         device_signature(
             PRF,
-            ckmg::DevicePurpose::WalletBirthDevice,
+            ckmg::DeviceFormat::WalletBirthDevice,
             &origin(),
             &auth,
             [45; 32],
@@ -514,7 +520,7 @@ async fn birth_passport_and_birth_stamp_are_first_only_idempotent_and_race_once(
         .begin_issuance(&mut rng, global.issuer_public_key(), &challenge)
         .unwrap();
     let passport_signature = |seed: [u8; 32], purpose, request: &IssuanceRequest| {
-        ckmg::passkey::sign_device_opened(
+        ckmg::passkey::sign_device_birth(
             &prf(seed),
             "wallet",
             purpose,
@@ -530,7 +536,7 @@ async fn birth_passport_and_birth_stamp_are_first_only_idempotent_and_race_once(
                 &session,
                 &challenge,
                 &request,
-                &passport_signature(PRF, ckmg::DevicePurpose::WalletBirthPassport, &request),
+                &passport_signature(PRF, ckmg::DeviceFormat::WalletBirthPassport, &request),
                 100
             )
             .await,
@@ -549,8 +555,8 @@ async fn birth_passport_and_birth_stamp_are_first_only_idempotent_and_race_once(
         .unwrap();
     // Wrong tag or another key's signature refuses.
     for signature in [
-        passport_signature(PRF, ckmg::DevicePurpose::WalletBirthDevice, &request),
-        passport_signature([10; 32], ckmg::DevicePurpose::WalletBirthPassport, &request),
+        passport_signature(PRF, ckmg::DeviceFormat::WalletBirthDevice, &request),
+        passport_signature([10; 32], ckmg::DeviceFormat::WalletBirthPassport, &request),
     ] {
         assert!(matches!(
             global
@@ -564,12 +570,9 @@ async fn birth_passport_and_birth_stamp_are_first_only_idempotent_and_race_once(
     let rival_request = rival
         .begin_issuance(&mut rng, global.issuer_public_key(), &challenge)
         .unwrap();
-    let signature = passport_signature(PRF, ckmg::DevicePurpose::WalletBirthPassport, &request);
-    let rival_signature = passport_signature(
-        PRF,
-        ckmg::DevicePurpose::WalletBirthPassport,
-        &rival_request,
-    );
+    let signature = passport_signature(PRF, ckmg::DeviceFormat::WalletBirthPassport, &request);
+    let rival_signature =
+        passport_signature(PRF, ckmg::DeviceFormat::WalletBirthPassport, &rival_request);
     let (mut left_rng, mut right_rng) = (StdRng::seed_from_u64(1), StdRng::seed_from_u64(2));
     let (left, right) = tokio::join!(
         global.issue_birth_passport(
@@ -717,10 +720,10 @@ async fn a_normal_stamp_closes_the_birth_stamp_for_good() {
     let request = holder
         .begin_issuance(&mut rng, global.issuer_public_key(), &challenge)
         .unwrap();
-    let signature = ckmg::passkey::sign_device_opened(
+    let signature = ckmg::passkey::sign_device_birth(
         &prf(PRF),
         "wallet",
-        ckmg::DevicePurpose::WalletBirthPassport,
+        ckmg::DeviceFormat::WalletBirthPassport,
         &ckmg::wallet_birth_passport_payload(&request.to_bytes()),
     )
     .unwrap();
