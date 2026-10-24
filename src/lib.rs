@@ -23,8 +23,8 @@ pub use fingerprint::FingerprintKey;
 pub use stamp::StampRate;
 pub use types::*;
 pub use wallet::{
-    EndedChain, EndedReason, MAX_ENDED, Wallet, WalletBirthStatement, WalletDeviceObservation, WalletMutation,
-    WalletPasskeyCertificate, WalletPublicationConfig, WalletShutdown,
+    EndedChain, EndedReason, MAX_ENDED, Wallet, WalletBirthStatement, WalletDeviceObservation,
+    WalletMutation, WalletPasskeyCertificate, WalletPublicationConfig, WalletShutdown,
 };
 
 /// Schemas for a NEW global database, in service-assigned migration order.
