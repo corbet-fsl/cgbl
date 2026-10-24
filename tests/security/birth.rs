@@ -758,7 +758,8 @@ async fn a_normal_stamp_closes_the_birth_stamp_for_good() {
         .issue_stamp(&mut rng, &session, &normal, &nonce, confirmation, 100)
         .await
         .unwrap();
-    holder.finish_stamp(&stamp, 100).unwrap();
+    let epoch = global.stamp_epoch(100).await.unwrap();
+    holder.finish_stamp(&stamp, epoch, 100).unwrap();
     // Every later assertion-free stamp is refused: another request and the very same one.
     let (nonce, stamp_public) = global
         .stamp_challenge(&mut rng, &session, 100)
@@ -781,5 +782,5 @@ async fn a_normal_stamp_closes_the_birth_stamp_for_good() {
         .issue_stamp(&mut rng, &session, &birth, &nonce, confirmation, 100)
         .await
         .unwrap();
-    holder.finish_stamp(&next, 100).unwrap();
+    holder.finish_stamp(&next, epoch, 100).unwrap();
 }
