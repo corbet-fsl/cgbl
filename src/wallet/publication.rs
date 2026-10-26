@@ -321,7 +321,12 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
         self.sample(now)?;
         self.key_ring()?;
         let retained = self.current().await?;
-        if retained.state.ended.iter().any(|e| e.fingerprint == chain.fingerprint) {
+        if retained
+            .state
+            .ended
+            .iter()
+            .any(|e| e.fingerprint == chain.fingerprint)
+        {
             self.retained = Some(retained);
             return Ok(());
         }

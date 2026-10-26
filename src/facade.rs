@@ -627,12 +627,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     /// Permanent records cannot be replaced or downgraded. Exact retries are idempotent.
     /// A host-authenticated self-ban may terminate a subject before its first
     /// successful gate. No gate or uniqueness fingerprint is invented for it.
-    pub async fn burn(
-        &self,
-        subject: &Subject,
-        burn: Burn,
-        now: u64,
-    ) -> Result<u64> {
+    pub async fn burn(&self, subject: &Subject, burn: Burn, now: u64) -> Result<u64> {
         time(now)?;
         let read = self
             .read(vec![
@@ -644,9 +639,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let mut state: State = get(&read, &meta("state"))?.ok_or(Error::NoPolicy)?;
         let mut person: Account = match get(&read, &account(subject))? {
             Some(person) => person,
-            None if burn == Burn::Permanent(PermanentReason::SelfBan) => {
-                Account::default()
-            }
+            None if burn == Burn::Permanent(PermanentReason::SelfBan) => Account::default(),
             None => return Err(Error::UnknownSubject),
         };
         if person.burn.as_ref() == Some(&burn) {

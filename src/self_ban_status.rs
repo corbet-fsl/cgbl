@@ -1,6 +1,6 @@
 //! Exact own-account receipt lookup; authentication belongs to the trusted host.
 use crate::{
-    Account, Global, PermanentReason, Result, Subject, Burn,
+    Account, Burn, Global, PermanentReason, Result, Subject,
     storage::{Key, Store},
 };
 
@@ -18,8 +18,7 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             .get(&key)
             .map(|record| serde_json::from_slice(&record.value).map_err(|_| crate::Error::Encoding))
             .transpose()?;
-        Ok(account.is_some_and(|account| {
-            account.burn == Some(Burn::Permanent(PermanentReason::SelfBan))
-        }))
+        Ok(account
+            .is_some_and(|account| account.burn == Some(Burn::Permanent(PermanentReason::SelfBan))))
     }
 }

@@ -51,13 +51,7 @@ async fn self_ban_preserves_genuine_verified_gate_facts_and_burned_comparison_id
     let fingerprints = store.list("fingerprint", "", 10).await.unwrap();
     assert_eq!(fingerprints.records.len(), 1);
     let burn = Burn::Permanent(PermanentReason::SelfBan);
-    assert_eq!(
-        global
-            .burn(&alice, burn.clone(), 101)
-            .await
-            .unwrap(),
-        2
-    );
+    assert_eq!(global.burn(&alice, burn.clone(), 101).await.unwrap(), 2);
     assert_eq!(global.burn(&alice, burn, 102).await.unwrap(), 2);
     let after = store
         .read(std::slice::from_ref(&account_key))

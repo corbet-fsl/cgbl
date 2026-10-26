@@ -82,14 +82,8 @@ async fn permanent_self_ban_before_any_gate_creates_only_terminal_state_and_surv
     let who = subject("wallet-before-first-gate");
     let burn = Burn::Permanent(PermanentReason::SelfBan);
     assert!(!global.self_ban_status(&who).await.unwrap());
-    assert_eq!(
-        global.burn(&who, burn.clone(), 101).await.unwrap(),
-        2
-    );
-    assert_eq!(
-        global.burn(&who, burn.clone(), 102).await.unwrap(),
-        2
-    );
+    assert_eq!(global.burn(&who, burn.clone(), 101).await.unwrap(), 2);
+    assert_eq!(global.burn(&who, burn.clone(), 102).await.unwrap(), 2);
     let read = store
         .read(&[storage::Key::new("account", who.as_str())])
         .await
@@ -129,11 +123,7 @@ async fn permanent_self_ban_before_any_gate_creates_only_terminal_state_and_surv
     ));
     assert!(matches!(
         reopened
-            .burn(
-                &who,
-                Burn::Permanent(PermanentReason::LegalOrder),
-                104
-            )
+            .burn(&who, Burn::Permanent(PermanentReason::LegalOrder), 104)
             .await,
         Err(Error::Burned)
     ));
@@ -145,11 +135,7 @@ async fn missing_subject_still_refuses_legal_block_without_writing() {
     let who = subject("unknown-non-self-ban");
     assert!(matches!(
         global
-            .burn(
-                &who,
-                Burn::Permanent(PermanentReason::LegalOrder),
-                101
-            )
+            .burn(&who, Burn::Permanent(PermanentReason::LegalOrder), 101)
             .await,
         Err(Error::UnknownSubject)
     ));
@@ -165,11 +151,7 @@ async fn missing_subject_still_refuses_legal_block_without_writing() {
     // A later genuine self-ban can still terminate this unverified account.
     assert_eq!(
         global
-            .burn(
-                &who,
-                Burn::Permanent(PermanentReason::SelfBan),
-                COHORT + 1
-            )
+            .burn(&who, Burn::Permanent(PermanentReason::SelfBan), COHORT + 1)
             .await
             .unwrap(),
         2
@@ -426,11 +408,7 @@ async fn authority_policy_epoch_is_independent_of_blocks_and_status_is_coarse() 
     ));
     assert_eq!(
         global
-            .burn(
-                &who,
-                Burn::Permanent(PermanentReason::LegalOrder),
-                200
-            )
+            .burn(&who, Burn::Permanent(PermanentReason::LegalOrder), 200)
             .await
             .unwrap(),
         2

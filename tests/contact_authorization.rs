@@ -123,11 +123,7 @@ async fn terminal_pre_gate_self_ban_refuses_read_only_contact_authorization() {
     let subject = Subject::new("alice").unwrap();
     let check = CheckId::generate(&mut StdRng::seed_from_u64(2));
     facade
-        .burn(
-            &subject,
-            Burn::Permanent(PermanentReason::SelfBan),
-            100,
-        )
+        .burn(&subject, Burn::Permanent(PermanentReason::SelfBan), 100)
         .await
         .unwrap();
     assert!(matches!(

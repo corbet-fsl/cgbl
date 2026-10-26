@@ -562,22 +562,14 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
     pending.finish(&blind).unwrap();
     assert_eq!(
         global
-            .burn(
-                &alice,
-                Burn::Permanent(PermanentReason::LegalOrder),
-                200
-            )
+            .burn(&alice, Burn::Permanent(PermanentReason::LegalOrder), 200)
             .await
             .unwrap(),
         2
     );
     assert_eq!(
         global
-            .burn(
-                &alice,
-                Burn::Permanent(PermanentReason::LegalOrder),
-                200
-            )
+            .burn(&alice, Burn::Permanent(PermanentReason::LegalOrder), 200)
             .await
             .unwrap(),
         2
@@ -628,11 +620,7 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
     // A permanent record is never replaced or downgraded, not even by a self-ban.
     assert!(matches!(
         global
-            .burn(
-                &alice,
-                Burn::Permanent(PermanentReason::SelfBan),
-                DAY + 1
-            )
+            .burn(&alice, Burn::Permanent(PermanentReason::SelfBan), DAY + 1)
             .await,
         Err(Error::Burned)
     ));
@@ -657,11 +645,7 @@ async fn scenario<S: Store, K: csgn::Store, I: cpsd::IssuanceStore>(
     ));
     assert_eq!(
         global
-            .burn(
-                &bob,
-                Burn::Permanent(PermanentReason::LegalOrder),
-                DAY + 3
-            )
+            .burn(&bob, Burn::Permanent(PermanentReason::LegalOrder), DAY + 3)
             .await
             .unwrap(),
         3
