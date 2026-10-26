@@ -20,7 +20,7 @@ mod wallet;
 pub use cpsd::{BlindPassport, IssuanceChallenge, IssuanceRequest, IssuerPublicKey};
 pub use facade::{Global, Limits};
 pub use fingerprint::FingerprintKey;
-pub use stamp::StampRate;
+pub use stamp::{STAMP_MAX_PER_DAY, StampRate};
 pub use types::*;
 pub use wallet::{
     EndedChain, EndedReason, MAX_ENDED, Wallet, WalletBirthStatement, WalletDeviceObservation,

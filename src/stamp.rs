@@ -3,7 +3,7 @@
 //! The wallet issues a stamp only to the member who just passed ONE fresh user verification of
 //! the wallet passkey over the request's confirmation challenge, only for that member's own
 //! passport secret (the request's issuer tag must equal the tag of the member's passport), and
-//! at most `StampRate::limit` times per period. The stamp key is a NEW key, never the passport
+//! at most `STAMP_MAX_PER_DAY` times per UTC day. The stamp key is a NEW key, never the passport
 //! key; its cohort is the rulebook's stamp cohort. The wallet sees no digest and no community.
 use crate::{
     birth::{Item, Open},
@@ -18,14 +18,15 @@ use cpsd::{
 };
 use serde::{Deserialize, Serialize};
 
-/// Per-member stamp budget (rulebook setting): at most `limit` stamps per `period_seconds`,
-/// counted in fixed UTC-aligned windows.
+/// Invisible technical brake: at most this many stamps per member and UTC day,
+/// counted in fixed UTC-aligned windows. Each stamp already needs a fresh
+/// passkey UP+UV; the ceiling only stops a runaway device, and honest flows
+/// never reach it.
+pub const STAMP_MAX_PER_DAY: u32 = 4096;
+
+/// How long the wallet answers the SAME stamp request again with the SAME stamp.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct StampRate {
-    /// Stamps per member and window.
-    pub limit: u32,
-    /// Window length in seconds.
-    pub period_seconds: u64,
     /// How long the wallet answers the SAME stamp request again with the SAME stamp, without
     /// a new user verification and without another budget charge (a device that was killed
     /// after the wallet replied and before it stored the stamp). 0 disables the replay.
@@ -33,11 +34,9 @@ pub struct StampRate {
 }
 
 impl Default for StampRate {
-    /// Twenty confirmations per UTC day: every join, pairing and revocation of a busy day.
+    /// Ten minutes: a device killed after the reply and before it stored the stamp.
     fn default() -> Self {
         Self {
-            limit: 20,
-            period_seconds: 86_400,
             replay_seconds: 600,
         }
     }
@@ -97,14 +96,10 @@ fn stamp_error(error: cpsd::Error) -> Error {
 }
 
 impl<S, K, I> Global<S, K, I> {
-    /// Attach the wallet's stamp issuer key and the per-member budget. The key must not be
+    /// Attach the wallet's stamp issuer key and replay window. The key must not be
     /// the passport key's material and its cohort is the rulebook's stamp cohort.
     pub fn attach_stamps(&mut self, key: StampIssuerKey, rate: StampRate) -> Result<()> {
-        if rate.limit == 0
-            || rate.period_seconds == 0
-            || rate.period_seconds > 366 * 86_400
-            || rate.replay_seconds > 86_400
-        {
+        if rate.replay_seconds > 86_400 {
             return Err(Error::Capacity);
         }
         self.stamps = Some(Stamps { key, rate });
@@ -150,7 +145,7 @@ where
         let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
         person.eligible()?;
         let used: Budget = get(&read, &budget(subject))?.unwrap_or_default();
-        if used.window == window(now, stamps.rate) && used.used >= stamps.rate.limit {
+        if used.window == window(now) && used.used >= STAMP_MAX_PER_DAY {
             return Err(Error::Capacity);
         }
         let holder = self.stamp_holder(session).await?;
@@ -276,7 +271,7 @@ where
         }
         let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
         person.eligible()?;
-        let current = window(now, stamps.rate);
+        let current = window(now);
         let mut used: Budget = get(&read, &budget(subject))?.unwrap_or_default();
         if used.window != current {
             used = Budget {
@@ -284,7 +279,7 @@ where
                 used: 0,
             };
         }
-        if used.used >= stamps.rate.limit {
+        if used.used >= STAMP_MAX_PER_DAY {
             return Err(Error::Capacity);
         }
         used.used += 1;
@@ -422,8 +417,8 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
     }
 }
 
-fn window(now: u64, rate: StampRate) -> u64 {
-    now / rate.period_seconds * rate.period_seconds
+fn window(now: u64) -> u64 {
+    now / 86_400 * 86_400
 }
 
 #[cfg(test)]
