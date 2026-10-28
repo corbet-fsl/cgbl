@@ -163,3 +163,126 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         })
     }
 }
+
+// Focused kill tests for the barrier.rs survivors in the mut138 brief.
+//
+// - `bind` pins the first SDK owner: a second, different SDK is refused
+//   (kills 23:9 `-> Ok(())` and 25:31 guard `-> false`).
+// - `same` requires the identical barrier AND instance AND owner match:
+//   a wallet on a different barrier (only that arm firing) is refused
+//   (kills 97:9 `-> Ok(())` and both `||` -> `&&` mutants at 98:13/99:13).
+//
+// NOTE: the three `WalletMutation::execute` `||` -> `&&` mutants
+// (79:50, 83:50, 91:41) are unreachable: the pre-, post- and post-await
+// guards test the same monotonic state (dead instance or fenced barrier)
+// three times, so weakening any single one never changes the outcome while
+// the other two stay real. No deterministic single-threaded test can make
+// exactly one of the three fire.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::MemoryStore;
+    use std::sync::Arc;
+
+    const RP: &str = "wallet.example.test";
+    const ORIGIN: &str = "https://vault.wallet.example.test";
+    const DAY: u64 = 86_400;
+
+    async fn passkeys() -> (tempfile::TempDir, Arc<ckyh::Passkeys<ckyh::LibsqlStore>>) {
+        let directory = tempfile::tempdir().unwrap();
+        let url = ckyh::Url::from_file_path(directory.path().join("wallet.db")).unwrap();
+        let db = crlt::Db::open(crlt::Config::new(url.as_str(), ""))
+            .await
+            .unwrap();
+        db.migrate(&[crlt::Migration::new(1, "passkeys", ckyh::LIBSQL_SCHEMA)])
+            .await
+            .unwrap();
+        let keys = Arc::new(
+            ckyh::Passkeys::new(
+                ckyh::LibsqlStore::new(&db, "wallet", tokio::runtime::Handle::current()).unwrap(),
+                "wallet",
+                RP,
+                &[ckyh::Url::parse(ORIGIN).unwrap()],
+            )
+            .unwrap(),
+        );
+        (directory, keys)
+    }
+
+    async fn wallet_with(
+        barrier: Arc<Barrier>,
+        instance: &Arc<()>,
+        sdk: Arc<ckyh::Passkeys<ckyh::LibsqlStore>>,
+    ) -> Wallet<MemoryStore, csgn::MemoryStore> {
+        Wallet {
+            barrier,
+            pending: Vec::new(),
+            publication_reads: None,
+            passkeys: sdk,
+            instance: Arc::downgrade(instance),
+            store: MemoryStore::new("barrier-test").unwrap(),
+            signer: csgn::PersistentSigner::create(
+                csgn::MemoryStore::default(),
+                "wallet",
+                csgn::SecretKey::from_seed(&mut [47; 32]),
+                0,
+                30 * DAY,
+            )
+            .await
+            .unwrap(),
+            retained: None,
+            beacon: cbcn::Beacon::default(),
+            observed_at: Some(100),
+        }
+    }
+
+    async fn mutation_for(
+        barrier: Arc<Barrier>,
+        instance: &Arc<()>,
+        sdk: Arc<ckyh::Passkeys<ckyh::LibsqlStore>>,
+    ) -> WalletMutation {
+        let gate = Arc::new(tokio::sync::Mutex::new(()));
+        WalletMutation {
+            barrier,
+            instance: Arc::downgrade(instance),
+            sdk,
+            _guard: gate.lock_owned().await,
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn bind_pins_the_first_sdk_and_refuses_a_different_owner() {
+        let barrier = Barrier::new();
+        let (_first_dir, first) = passkeys().await;
+        let (_second_dir, second) = passkeys().await;
+        assert!(barrier.bind(&first).is_ok());
+        assert!(barrier.bind(&first).is_ok());
+        assert!(matches!(
+            barrier.bind(&second),
+            Err(crate::Error::KeyMismatch)
+        ));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn same_accepts_the_identical_owner() {
+        let (_dir, sdk) = passkeys().await;
+        let instance = Arc::new(());
+        let barrier = Arc::new(Barrier::new());
+        let mutation = mutation_for(barrier.clone(), &instance, sdk.clone()).await;
+        let wallet = wallet_with(barrier, &instance, sdk.clone()).await;
+        assert!(mutation.same(&wallet).is_ok());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn same_refuses_a_wallet_on_a_different_barrier() {
+        let (_dir, sdk) = passkeys().await;
+        let instance = Arc::new(());
+        let mutation = mutation_for(Arc::new(Barrier::new()), &instance, sdk.clone()).await;
+        let wallet = wallet_with(Arc::new(Barrier::new()), &instance, sdk.clone()).await;
+        assert!(matches!(
+            mutation.same(&wallet),
+            Err(crate::Error::KeyMismatch)
+        ));
+    }
+}

@@ -35,3 +35,40 @@ impl GlobalGate for DevelopmentGate {
         })
     }
 }
+
+// Focused kill tests for the development.rs survivors in the mut138 brief.
+// The module only compiles with `development-gate` (debug), so run with
+// `cargo test -p cgbl --features development-gate development::`.
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use cpsd::rand::{SeedableRng, rngs::StdRng};
+
+    #[test]
+    fn development_gate_advertises_the_synthetic_identity() {
+        // Kills 17:9 `-> ""` and `-> "xyzzy"`, 20:9 `-> ""` and
+        // `-> "xyzzy"`, and 23:9 `-> false`.
+        let gate = DevelopmentGate::new(123);
+        assert_eq!(gate.id(), "development");
+        assert_eq!(gate.provider(), "cgbl.test");
+        assert!(gate.development_only());
+    }
+
+    #[tokio::test]
+    async fn development_verify_returns_the_configured_expiry_and_echoes_the_input() {
+        // The 32:9 `Ok(Default::default())` mutant does not compile
+        // (GateEvidence has no Default impl); this pins the real contract:
+        // the configured expiry and the exact input as uniqueness.
+        let gate = DevelopmentGate::new(999);
+        let subject = Subject::new("dev-subject").unwrap();
+        let mut rng = StdRng::seed_from_u64(7);
+        let check = crate::CheckId::generate(&mut rng);
+        let evidence = gate.verify(&check, &subject, b"token", 100).await.unwrap();
+        assert_eq!(evidence.valid_until, 999);
+        let uniqueness = evidence
+            .uniqueness
+            .expect("development gate echoes its input");
+        assert_eq!(&uniqueness[..], &b"token"[..]);
+    }
+}

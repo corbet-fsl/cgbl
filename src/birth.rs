@@ -276,4 +276,193 @@ mod tests {
         let key = Item::Device.key(&subject());
         assert!(matches!(check(&read, &key, &[0; 32]), Err(Error::Storage)));
     }
+    // Focused kill tests for the birth.rs survivors listed in the mut138 brief.
+    // Each test isolates one operator so the listed mutant flips its verdict
+    // while the real code passes.
+    //
+    // - `MAX_OUTPUT_BYTES` is exactly `cplc::MAX_DOCUMENT_BYTES + 8192`, so the
+    //   `+` -> `-` and `+` -> `*` mutants at 23:58 change the bound (the formula
+    //   test pins it; the boundary tests pin the behaviour).
+    // - `check` refuses a wrong version OR an oversized output (`||`); each
+    //   single-violation test kills the `&&` mutant at 96:32, and the boundary
+    //   tests pin `>` against `==`/`>=` at 96:53.
+    // - `completed` hides wrong-version rows AND empty outputs (`&&`); each
+    //   single-side test kills the `||` mutant at 129:48.
+    // - `change` accepts exactly MAX and refuses MAX+1, killing both `>`
+    //   mutants at 135:21.
+
+    // Cap probe allocations: on the real code MAX is ~1MB, but the `+` -> `*`
+    // mutant makes it ~8.6GB, which would OOM instead of failing. The exact
+    // formula is pinned by max_output_bytes_is_the_document_sum_plus_the_margin.
+    fn probe_max() -> usize {
+        super::MAX_OUTPUT_BYTES.min(1 << 21)
+    }
+
+    #[test]
+    fn max_output_bytes_is_the_document_sum_plus_the_signature_margin() {
+        assert_eq!(super::MAX_OUTPUT_BYTES, cplc::MAX_DOCUMENT_BYTES + 8192);
+    }
+
+    #[tokio::test]
+    async fn change_accepts_an_output_of_exactly_max_bytes() {
+        // Kills 23:58 `+` -> `-` (the smaller bound would refuse) and
+        // 135:21 `>` -> `==` / `>=` (the boundary itself would be refused).
+        let store = MemoryStore::new("global").unwrap();
+        let key = Item::Stamp.key(&subject());
+        let input = Item::Stamp.input(&[b"boundary"]);
+        store
+            .compare_exchange(
+                &store.read(std::slice::from_ref(&key)).await.unwrap(),
+                vec![change(key, input, vec![7; probe_max()]).unwrap()],
+            )
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn change_refuses_an_output_one_byte_past_max() {
+        // Kills 23:58 `+` -> `*` (the huge bound would accept) and
+        // 135:21 `>` -> `==` (MAX+1 != MAX, so the mutant would accept).
+        let store = MemoryStore::new("global").unwrap();
+        let key = Item::Stamp.key(&subject());
+        let input = Item::Stamp.input(&[b"boundary"]);
+        assert!(matches!(
+            change(key, input, vec![7; probe_max() + 1]),
+            Err(Error::Capacity)
+        ));
+    }
+
+    #[tokio::test]
+    async fn check_refuses_a_wrong_version_even_with_a_small_output() {
+        // Kills 96:32 `||` -> `&&`: only the version arm fires, so the mutant
+        // skips the refusal.
+        let store = MemoryStore::new("global").unwrap();
+        let key = Item::Stamp.key(&subject());
+        let input = Item::Stamp.input(&[b"v"]);
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        store
+            .compare_exchange(
+                &read,
+                vec![
+                    put(
+                        key.clone(),
+                        &BirthItem {
+                            version: 2,
+                            input,
+                            output: vec![1],
+                        },
+                    )
+                    .unwrap(),
+                ],
+            )
+            .await
+            .unwrap();
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        assert!(matches!(check(&read, &key, &input), Err(Error::Encoding)));
+    }
+
+    #[tokio::test]
+    async fn check_refuses_an_oversized_output_even_with_the_current_version() {
+        // Kills 96:32 `||` -> `&&` (only the length arm fires) and
+        // 96:53 `>` -> `==` (MAX+1 != MAX, so the mutant accepts).
+        let store = MemoryStore::new("global").unwrap();
+        let key = Item::Stamp.key(&subject());
+        let input = Item::Stamp.input(&[b"v"]);
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        store
+            .compare_exchange(
+                &read,
+                vec![
+                    put(
+                        key.clone(),
+                        &BirthItem {
+                            version: VERSION,
+                            input,
+                            output: vec![1; probe_max() + 1],
+                        },
+                    )
+                    .unwrap(),
+                ],
+            )
+            .await
+            .unwrap();
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        assert!(matches!(check(&read, &key, &input), Err(Error::Encoding)));
+    }
+
+    #[tokio::test]
+    async fn check_accepts_a_current_output_of_exactly_max_bytes() {
+        // Kills 96:53 `>` -> `==` and `>` -> `>=`: the boundary output is legal.
+        let store = MemoryStore::new("global").unwrap();
+        let key = Item::Stamp.key(&subject());
+        let input = Item::Stamp.input(&[b"v"]);
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        store
+            .compare_exchange(
+                &read,
+                vec![change(key.clone(), input, vec![7; probe_max()]).unwrap()],
+            )
+            .await
+            .unwrap();
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        assert_eq!(
+            check(&read, &key, &input).unwrap(),
+            Open::Done(vec![7; probe_max()])
+        );
+    }
+
+    #[tokio::test]
+    async fn completed_hides_a_wrong_version_row_with_output() {
+        // Kills 129:48 `&&` -> `||`: the version arm alone is false, so the
+        // mutant surfaces the row.
+        let store = MemoryStore::new("global").unwrap();
+        let key = Item::Device.key(&subject());
+        let input = Item::Device.input(&[b"v"]);
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        store
+            .compare_exchange(
+                &read,
+                vec![
+                    put(
+                        key.clone(),
+                        &BirthItem {
+                            version: 2,
+                            input,
+                            output: vec![1],
+                        },
+                    )
+                    .unwrap(),
+                ],
+            )
+            .await
+            .unwrap();
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        assert_eq!(completed(&read, &key).unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn completed_hides_a_current_but_empty_output() {
+        // Kills 129:48 `&&` -> `||`: the emptiness arm alone is false, so the
+        // mutant surfaces the unfinished row.
+        let store = MemoryStore::new("global").unwrap();
+        let key = Item::Genesis.key(&subject());
+        let input = Item::Genesis.input(&[b"v"]);
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        store
+            .compare_exchange(&read, vec![change(key.clone(), input, Vec::new()).unwrap()])
+            .await
+            .unwrap();
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        assert_eq!(completed(&read, &key).unwrap(), None);
+        // A finished row is still returned (the mutant agrees here).
+        let key = Item::Stamp.key(&subject());
+        let input = Item::Stamp.input(&[b"v"]);
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        store
+            .compare_exchange(&read, vec![change(key.clone(), input, vec![7, 7]).unwrap()])
+            .await
+            .unwrap();
+        let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+        assert_eq!(completed(&read, &key).unwrap(), Some(vec![7, 7]));
+    }
 }

@@ -175,3 +175,157 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         })
     }
 }
+
+// Focused kill tests for the certificate.rs survivors in the mut138 brief.
+//
+// - `into_bytes` returns the exact signed bytes (kills 26:9 `-> vec![]`,
+//   `-> vec![0]` and `-> vec![1]`).
+// - `Debug` is the constant redaction (kills 31:9 `-> Ok(Default::default())`).
+// - `Timing::sample` refuses a backwards clock, an expired window, a spent
+//   lifetime and an invalid clock, and accepts a forward step: each
+//   single-arm test kills the matching `||` -> `&&` mutant at
+//   67:13/68:13/69:13 (and the whole-body `-> Ok(())` at 65:9), while the
+//   forward test kills `<` -> `>` at 66:16.
+// - The day-floor factor of `wallet_passkey_certificate` (143:56 `*` -> `/`)
+//   is pinned by the `certificate_issued_time_is_the_day_floor` integration
+//   test in tests/mut138.rs (it needs a live wallet + ceremony).
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::storage::MemoryStore;
+    use std::sync::Arc;
+
+    const T_NOW: u64 = 1_000_000;
+    const T_DAY: u64 = 86_400;
+
+    #[test]
+    fn into_bytes_returns_the_exact_signed_bytes() {
+        let bytes = vec![9u8, 8, 7, 6, 5];
+        let certificate = WalletPasskeyCertificate {
+            bytes: bytes.clone(),
+            checked_at: 42,
+        };
+        assert_eq!(certificate.into_bytes(), bytes);
+    }
+
+    #[test]
+    fn debug_is_a_constant_redaction() {
+        let certificate = WalletPasskeyCertificate {
+            bytes: vec![1, 2, 3],
+            checked_at: 7,
+        };
+        let rendered = format!("{certificate:?}");
+        assert_eq!(rendered, "WalletPasskeyCertificate([redacted])");
+    }
+
+    async fn timing_wallet() -> (
+        tempfile::TempDir,
+        Wallet<MemoryStore, csgn::MemoryStore>,
+        Arc<()>,
+    ) {
+        let directory = tempfile::tempdir().unwrap();
+        let url = ckyh::Url::from_file_path(directory.path().join("wallet.db")).unwrap();
+        let db = crlt::Db::open(crlt::Config::new(url.as_str(), ""))
+            .await
+            .unwrap();
+        db.migrate(&[crlt::Migration::new(1, "passkeys", ckyh::LIBSQL_SCHEMA)])
+            .await
+            .unwrap();
+        let passkeys = Arc::new(
+            ckyh::Passkeys::new(
+                ckyh::LibsqlStore::new(&db, "wallet", tokio::runtime::Handle::current()).unwrap(),
+                "wallet",
+                "wallet.example.test",
+                &[ckyh::Url::parse("https://vault.wallet.example.test").unwrap()],
+            )
+            .unwrap(),
+        );
+        let instance = Arc::new(());
+        let wallet = Wallet {
+            barrier: Arc::new(crate::wallet::barrier::Barrier::new()),
+            pending: Vec::new(),
+            publication_reads: None,
+            passkeys,
+            instance: Arc::downgrade(&instance),
+            store: MemoryStore::new("timing-test").unwrap(),
+            signer: csgn::PersistentSigner::create(
+                csgn::MemoryStore::default(),
+                "wallet",
+                csgn::SecretKey::from_seed(&mut [47; 32]),
+                0,
+                30 * T_DAY,
+            )
+            .await
+            .unwrap(),
+            retained: None,
+            beacon: cbcn::Beacon::default(),
+            observed_at: Some(T_NOW),
+        };
+        (directory, wallet, instance)
+    }
+
+    fn live_timing(observed_at: u64, expires: u64) -> Timing {
+        Timing {
+            began: Instant::now(),
+            lifetime: Duration::from_secs(3600),
+            expires,
+            observed_at,
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sample_accepts_a_forward_clock_inside_the_window() {
+        let (_dir, mut wallet, _instance) = timing_wallet().await;
+        let mut timing = live_timing(T_NOW, T_NOW + 3600);
+        assert!(timing.sample(&mut wallet, T_NOW).is_ok());
+        assert_eq!(timing.observed_at, T_NOW);
+        assert!(wallet.observed_at.is_some());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sample_refuses_a_backwards_clock_and_fences_the_wallet() {
+        let (_dir, mut wallet, _instance) = timing_wallet().await;
+        let mut timing = live_timing(T_NOW, T_NOW + 3600);
+        assert!(matches!(
+            timing.sample(&mut wallet, T_NOW - 1),
+            Err(crate::Error::InvalidTime)
+        ));
+        assert!(wallet.observed_at.is_none());
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sample_refuses_an_expired_window() {
+        let (_dir, mut wallet, _instance) = timing_wallet().await;
+        let mut timing = live_timing(T_NOW, T_NOW);
+        assert!(matches!(
+            timing.sample(&mut wallet, T_NOW),
+            Err(crate::Error::InvalidTime)
+        ));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sample_refuses_a_spent_lifetime() {
+        let (_dir, mut wallet, _instance) = timing_wallet().await;
+        let mut timing = Timing {
+            began: Instant::now(),
+            lifetime: Duration::ZERO,
+            expires: T_NOW + 3600,
+            observed_at: T_NOW,
+        };
+        assert!(matches!(
+            timing.sample(&mut wallet, T_NOW),
+            Err(crate::Error::InvalidTime)
+        ));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sample_refuses_an_invalid_clock() {
+        let (_dir, mut wallet, _instance) = timing_wallet().await;
+        let mut timing = live_timing(0, T_NOW + 3600);
+        assert!(matches!(
+            timing.sample(&mut wallet, 0),
+            Err(crate::Error::InvalidTime)
+        ));
+    }
+}
