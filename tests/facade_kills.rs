@@ -324,6 +324,39 @@ async fn empty_gate_catalogue_is_refused() {
 }
 
 #[tokio::test]
+async fn policy_whose_authority_window_ends_at_expiry_is_refused() {
+    // shared_expiry >= valid_until with equality: the expiry row's `||` ->
+    // `&&` mutant joins it with the empty-catalogue row and would accept this
+    // policy (valid gates, so the rest of the chain is clean).
+    let (global, _) = open_memory("exp184", 60, 5, issuer_for(1, &["phone"])).await;
+    let mut authority = authority().await;
+    assert!(matches!(
+        install_signed(
+            &global,
+            &mut authority,
+            &base_policy("exp184", 1, 1, COHORT),
+            10,
+            COHORT
+        )
+        .await,
+        Err(Error::Policy)
+    ));
+}
+
+#[tokio::test]
+async fn policy_for_another_scope_is_refused() {
+    // The revision/epoch-style `||` -> `&&` mutants join an early fence with
+    // the later gate rows: with `&&` a single-true side installs. A wrong
+    // scope (early true, gate rows clean) kills the mutants at the empty,
+    // length and uniqueness rows alike.
+    let (global, _) = open_memory("exp186x", 60, 5, issuer_for(1, &["phone"])).await;
+    assert!(matches!(
+        install(&global, &base_policy("another-scope", 1, 1, COHORT), 10).await,
+        Err(Error::Policy)
+    ));
+}
+
+#[tokio::test]
 async fn sixty_five_gates_are_refused_but_sixty_four_install() {
     let gate_names: Vec<String> = (0..64).map(|i| format!("g{i:02}")).collect();
     let gate_refs: Vec<&str> = gate_names.iter().map(String::as_str).collect();
@@ -774,6 +807,56 @@ async fn issuance_guard_observes_the_inclusive_deadline_tick() {
     assert!(matches!(
         global
             .issue(&mut rng, &session("alice"), &challenge, &request, 150)
+            .await,
+        Err(Error::Challenge)
+    ));
+}
+
+#[tokio::test]
+async fn replaying_a_consumed_challenge_maps_to_challenge() {
+    // A retry supersedes the outstanding challenge at once: the older one is
+    // refused at issuance. Completing a second challenge and then issuing
+    // with the consumed first one reaches cpsd's conflict (the facade fence
+    // still matches), surfacing Challenge. Deleting that passport_error arm
+    // would surface Passport instead.
+    let scope = "map878b";
+    let (global, _dir, url) = libsql_global(scope).await;
+    let mut rng = StdRng::seed_from_u64(878);
+    let secret = cpsd::HolderSecret::generate(&mut rng);
+    let first = global
+        .challenge(&mut rng, &session("alice"), 100, 150)
+        .await
+        .unwrap();
+    let (request, pending) =
+        cpsd::request_issue(&mut rng, &secret, global.issuer_public_key(), &first).unwrap();
+    let blind = global
+        .issue(&mut rng, &session("alice"), &first, &request, 100)
+        .await
+        .unwrap();
+    pending.finish(&blind).unwrap();
+    // A superseding challenge, whose stored nonce is rewound to the consumed
+    // first challenge via one-shot SQL: the facade fence matches, cpsd
+    // refuses the replay.
+    let _second = global
+        .challenge(&mut rng, &session("alice"), 101, 160)
+        .await
+        .unwrap();
+    let raw_db =
+        libsql::Builder::new_local(std::path::Path::new(url.trim_start_matches("file://")))
+            .build()
+            .await
+            .unwrap();
+    let raw = raw_db.connect().unwrap();
+    let first_bytes = serde_json::to_string(&first.to_bytes()).unwrap();
+    raw.execute_batch(&format!(
+        "UPDATE cgbl_record SET value = CAST(json_set(CAST(value AS TEXT), '$.nonce', json('{first_bytes}')) AS BLOB), \
+         revision = revision + 1 WHERE community_id = '{scope}' AND bucket = 'challenge' AND entry_key = 'alice';"
+    ))
+    .await
+    .unwrap();
+    assert!(matches!(
+        global
+            .issue(&mut rng, &session("alice"), &first, &request, 101)
             .await,
         Err(Error::Challenge)
     ));
