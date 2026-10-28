@@ -858,3 +858,102 @@ async fn an_ended_chain_is_published_once_in_the_communities_snapshot() {
     assert_eq!(ended[0].fingerprint, [0xab; 32]);
     assert_eq!(ended[0].ended_at, NOW);
 }
+#[tokio::test(flavor = "multi_thread")]
+async fn device_observation_reports_the_actual_final_owner_clock() {
+    let (global, _, _, _) = make().await;
+    let (_directory, keys, auth) = enrolled().await;
+    let mut owner = wallet(&global, keys.clone(), csgn::MemoryStore::default(), false).await;
+    // The observation carries the actual final owner clock, never a zeroed or
+    // unit placeholder (kills checked_at -> 0 and checked_at -> 1).
+    let observed = global
+        .authorize_wallet_device(&mut owner, &auth, [49; 32], NOW + 60, &|| NOW)
+        .await
+        .unwrap();
+    assert_eq!(observed.devices(), &[[49; 32]]);
+    assert_eq!(observed.checked_at(), NOW);
+    let current = global
+        .wallet_devices(&mut owner, &auth, NOW + 60, &|| NOW)
+        .await
+        .unwrap();
+    assert_eq!(current.checked_at(), NOW);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn foreign_facade_cannot_observe_authorize_or_signal_this_wallet() {
+    let (global, _, _, _) = make().await;
+    let (foreign, _, _, _) = make().await;
+    let (_directory, keys, auth) = enrolled().await;
+    let mut owner = wallet(&global, keys.clone(), csgn::MemoryStore::default(), false).await;
+    // A facade that does not own the wallet instance is refused before any
+    // read or write (kills owns_wallet -> Ok(()) and the || -> && weakening,
+    // which accepts a foreign instance while the community still matches).
+    assert!(matches!(
+        foreign
+            .wallet_devices(&mut owner, &auth, NOW + 60, &|| NOW)
+            .await,
+        Err(Error::KeyMismatch)
+    ));
+    assert!(matches!(
+        foreign
+            .authorize_wallet_device(&mut owner, &auth, [49; 32], NOW + 60, &|| NOW)
+            .await,
+        Err(Error::KeyMismatch)
+    ));
+    // Skipping the ownership gate must not silently succeed either
+    // (kills signal_wallet_key_mutation -> Ok(())).
+    let mutation = global.wallet_mutation(&mut owner).await.unwrap();
+    assert!(matches!(
+        foreign
+            .signal_wallet_key_mutation(&mut owner, &auth, &mutation, NOW + 60, &|| NOW)
+            .await,
+        Err(Error::KeyMismatch)
+    ));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rebinding_the_same_credential_replaces_the_old_device_key() {
+    let (global, store, _, _) = make().await;
+    let (_directory, keys, auth) = enrolled().await;
+    let mut owner = wallet(&global, keys.clone(), csgn::MemoryStore::default(), false).await;
+    let key = storage::Key::new("wallet-device", auth.member().to_string());
+    let credential = serde_json::to_value(auth.credential_id().as_ref().to_vec()).unwrap();
+    let first = global
+        .authorize_wallet_device(&mut owner, &auth, [49; 32], NOW + 60, &|| NOW)
+        .await
+        .unwrap();
+    assert_eq!(first.devices(), &[[49; 32]]);
+    // Same credential with a new device: the old binding is retired and
+    // replaced. A credential-or-key match must not count as already bound
+    // (kills the && -> || at 310:61), a same-key binding of another
+    // credential must not either (kills == -> != at 310:76), and the old
+    // credential row must not survive the retain (kills != -> == at 320:54).
+    let second = global
+        .authorize_wallet_device(&mut owner, &auth, [50; 32], NOW + 60, &|| NOW)
+        .await
+        .unwrap();
+    assert_eq!(second.devices(), &[[50; 32]]);
+    let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+    let replaced: serde_json::Value = serde_json::from_slice(&read.records[&key].value).unwrap();
+    assert_eq!(replaced["bindings"].as_array().unwrap().len(), 1);
+    assert_eq!(replaced["bindings"][0]["credential"], credential);
+    assert_eq!(
+        replaced["bindings"][0]["key"],
+        serde_json::to_value([50; 32]).unwrap()
+    );
+    assert!(
+        replaced["removed"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::to_value([49; 32]).unwrap())
+    );
+    // Re-authorizing the exact same pair is a no-op: the generation does not
+    // move (kills == -> != at 310:47, which would rewrite and bump it).
+    let generation = replaced["generation"].as_u64().unwrap();
+    global
+        .authorize_wallet_device(&mut owner, &auth, [50; 32], NOW + 60, &|| NOW)
+        .await
+        .unwrap();
+    let reread = store.read(std::slice::from_ref(&key)).await.unwrap();
+    let again: serde_json::Value = serde_json::from_slice(&reread.records[&key].value).unwrap();
+    assert_eq!(again["generation"].as_u64().unwrap(), generation);
+}

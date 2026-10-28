@@ -459,3 +459,7 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "tests/devices.rs"]
+mod tests;
