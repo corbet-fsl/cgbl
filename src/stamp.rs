@@ -492,4 +492,65 @@ mod tests {
             assert!(validate_ring(current.map(Vec::as_slice), &ring).is_err());
         }
     }
+
+    #[test]
+    fn public_key_bytes_are_the_key_bytes() {
+        let params = StampParams::new(86_400).unwrap();
+        let key =
+            StampIssuerKey::generate(&mut OsRng, KeyId::new("edge").unwrap(), &params).unwrap();
+        let expected = key.public_key().to_bytes();
+        assert!(!expected.is_empty());
+        let stamps = Stamps {
+            key,
+            rate: StampRate::default(),
+        };
+        assert_eq!(stamps.public_key_bytes(), expected);
+    }
+
+    #[test]
+    fn stamp_error_maps_each_cpsd_failure_to_its_privacy_preserving_error() {
+        assert!(matches!(
+            stamp_error(cpsd::Error::IssuerTagMismatch),
+            Error::HolderChanged
+        ));
+        assert!(matches!(
+            stamp_error(cpsd::Error::IssuerTagClaimed),
+            Error::HolderChanged
+        ));
+        assert!(matches!(
+            stamp_error(cpsd::Error::InvalidChallenge),
+            Error::Challenge
+        ));
+        assert!(matches!(
+            stamp_error(cpsd::Error::ChallengeConflict),
+            Error::Challenge
+        ));
+        assert!(matches!(
+            stamp_error(cpsd::Error::UnconfirmedStampRequest),
+            Error::Challenge
+        ));
+        assert!(matches!(
+            stamp_error(cpsd::Error::StorageCapacity),
+            Error::Capacity
+        ));
+        assert!(matches!(stamp_error(cpsd::Error::Storage), Error::Storage));
+    }
+
+    #[test]
+    fn window_cuts_utc_days() {
+        assert_eq!(window(1), 0);
+        assert_eq!(window(86_399), 0);
+        assert_eq!(window(86_400), 86_400);
+        assert_eq!(window(172_799), 86_400);
+        assert_eq!(window(172_800), 172_800);
+    }
+
+    #[test]
+    fn a_second_open_period_is_refused_even_when_the_last_open_matches() {
+        let (a, b) = (key("a"), key("b"));
+        // Two open periods: the ring is invalid no matter which key is current.
+        assert!(validate_ring(Some(&b), &[period(&a, 1, None), period(&b, 2, None)]).is_err());
+        assert!(validate_ring(Some(&a), &[period(&a, 1, None), period(&b, 2, None)]).is_err());
+        assert!(validate_ring(None, &[period(&a, 1, None), period(&b, 2, None)]).is_err());
+    }
 }
