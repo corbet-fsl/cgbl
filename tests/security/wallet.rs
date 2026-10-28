@@ -957,3 +957,155 @@ async fn rebinding_the_same_credential_replaces_the_old_device_key() {
     let again: serde_json::Value = serde_json::from_slice(&reread.records[&key].value).unwrap();
     assert_eq!(again["generation"].as_u64().unwrap(), generation);
 }
+
+// `reconcile_keys` capacity-guard kills (src/wallet/devices.rs): the guard
+// refuses with `Capacity` when EITHER revocation set exceeds
+// `cplc::MAX_ENTRIES`. Replacing the `||` with `&&` accepts an overflow on
+// exactly one side; replacing `>` with `==` misses every overflow past the
+// bound; replacing `>` with `>=` refuses the exact bound, which is legal.
+// Device-side overflows use fabricated rows for members with no passkeys
+// (their listing is empty, so only `removed` counts); passkey-side
+// overflows use genuine revoked passkeys against an empty device row.
+
+fn fabricated_member(n: u128) -> String {
+    ckyh::Uuid::from_u128(n).to_string()
+}
+
+async fn bare_keys() -> (tempfile::TempDir, Arc<ckyh::Passkeys<ckyh::LibsqlStore>>) {
+    let directory = tempfile::tempdir().unwrap();
+    let url = ckyh::Url::from_file_path(directory.path().join("wallet.db")).unwrap();
+    let db = crlt::Db::open(crlt::Config::new(url.as_str(), ""))
+        .await
+        .unwrap();
+    db.migrate(&[crlt::Migration::new(1, "passkeys", ckyh::LIBSQL_SCHEMA)])
+        .await
+        .unwrap();
+    let keys = Arc::new(
+        ckyh::Passkeys::new(
+            ckyh::LibsqlStore::new(&db, "wallet", tokio::runtime::Handle::current()).unwrap(),
+            "wallet",
+            RP,
+            &[ckyh::Url::parse(ORIGIN).unwrap()],
+        )
+        .unwrap(),
+    );
+    (directory, keys)
+}
+
+async fn inject_device_row(store: &MemoryStore, member: &str, tag: u8, removed: usize) {
+    let key = storage::Key::new("wallet-device", member);
+    let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+    let mut gone = Vec::with_capacity(removed);
+    for index in 0..removed {
+        let mut device = [0u8; 32];
+        device[0] = tag;
+        device[24..32].copy_from_slice(&(index as u64).to_be_bytes());
+        gone.push(device);
+    }
+    let value = serde_json::json!({
+        "version": 1,
+        "member": member,
+        "generation": 1,
+        "pending": false,
+        "bindings": [],
+        "removed": gone,
+        "births": [],
+    });
+    store
+        .compare_exchange(
+            &read,
+            vec![storage::Change {
+                key,
+                record: Some(storage::Record {
+                    value: serde_json::to_vec(&value).unwrap(),
+                    deadline: 0,
+                }),
+            }],
+        )
+        .await
+        .unwrap();
+}
+
+async fn revoked_credentials(
+    keys: Arc<ckyh::Passkeys<ckyh::LibsqlStore>>,
+    member: ckyh::Uuid,
+    count: usize,
+) {
+    tokio::task::spawn_blocking(move || {
+        let mut token = SoftToken::new(true).unwrap().0;
+        for _ in 0..count {
+            let (mut challenge, pending) = keys.start_registration(member).unwrap();
+            challenge
+                .public_key
+                .authenticator_selection
+                .as_mut()
+                .unwrap()
+                .require_resident_key = false;
+            let response = token
+                .perform_register(
+                    ckyh::Url::parse(ORIGIN).unwrap(),
+                    challenge.public_key,
+                    300_000,
+                )
+                .unwrap();
+            let record = keys
+                .finish_registration(
+                    pending,
+                    &response.into(),
+                    ckyh::CreationMonth::new(2026, 10).unwrap(),
+                )
+                .unwrap();
+            keys.revoke(member, record.credential_id()).unwrap();
+        }
+    })
+    .await
+    .unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reconcile_refuses_device_revocations_past_capacity_from_two_rows() {
+    // Kills devices.rs 405:46 `>` -> `==` (300 != 256, the mutant proceeds)
+    // and 406:21 `||` -> `&&` (only the device side overflows, the mutant
+    // proceeds): 300 device revocations with an empty passkey set is refused.
+    let (global, store, _, _) = make().await;
+    let (_directory, keys) = bare_keys().await;
+    let mut wallet = wallet(&global, keys, csgn::MemoryStore::default(), false).await;
+    inject_device_row(&store, &fabricated_member(1001), 1, 200).await;
+    inject_device_row(&store, &fabricated_member(1002), 2, 100).await;
+    assert!(matches!(wallet.trust_feed(NOW).await, Err(Error::Capacity)));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reconcile_accepts_device_revocations_at_exact_capacity() {
+    // Kills devices.rs 405:46 `>` -> `>=`: exactly MAX_ENTRIES is legal.
+    let (global, store, _, _) = make().await;
+    let (_directory, keys) = bare_keys().await;
+    let mut wallet = wallet(&global, keys, csgn::MemoryStore::default(), false).await;
+    inject_device_row(&store, &fabricated_member(1003), 3, cplc::MAX_ENTRIES).await;
+    wallet.trust_feed(NOW).await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reconcile_refuses_passkey_revocations_past_capacity() {
+    // Kills devices.rs 406:51 `>` -> `==` (257 != 256, the mutant proceeds):
+    // 257 revoked passkeys with no device revocations is refused.
+    let (global, store, _, _) = make().await;
+    let (_directory, keys) = bare_keys().await;
+    let member = ckyh::Uuid::from_u128(2001);
+    revoked_credentials(keys.clone(), member, cplc::MAX_ENTRIES + 1).await;
+    inject_device_row(&store, &member.to_string(), 4, 0).await;
+    let mut wallet = wallet(&global, keys, csgn::MemoryStore::default(), false).await;
+    assert!(matches!(wallet.trust_feed(NOW).await, Err(Error::Capacity)));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reconcile_accepts_passkey_revocations_at_exact_capacity() {
+    // Kills devices.rs 406:51 `>` -> `>=`: exactly MAX_ENTRIES is legal.
+    let (global, store, _, _) = make().await;
+    let (_directory, keys) = bare_keys().await;
+    let member = ckyh::Uuid::from_u128(2002);
+    revoked_credentials(keys.clone(), member, cplc::MAX_ENTRIES).await;
+    inject_device_row(&store, &member.to_string(), 5, 0).await;
+    let mut wallet = wallet(&global, keys, csgn::MemoryStore::default(), false).await;
+    wallet.trust_feed(NOW).await.unwrap();
+}
