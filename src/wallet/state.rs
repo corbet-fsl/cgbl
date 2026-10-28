@@ -137,6 +137,10 @@ fn max_stored_bytes() -> usize {
         + 6 * 4 * (cplc::MAX_DOCUMENT_BYTES + 8192)
         + 4 * cbcn::MAX_KEY_TRANSITION_BYTES
 }
+
+#[cfg(test)]
+#[path = "tests/state.rs"]
+mod tests;
 pub(super) fn change(state: &State) -> Result<Change> {
     state.validate()?;
     let value = serde_json::to_vec(state).map_err(|_| Error::Encoding)?;
