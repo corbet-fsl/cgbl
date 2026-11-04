@@ -958,6 +958,78 @@ async fn rebinding_the_same_credential_replaces_the_old_device_key() {
     assert_eq!(again["generation"].as_u64().unwrap(), generation);
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn read_only_binding_answers_only_the_current_credential_and_device() {
+    let (global, _, _, _) = make().await;
+    let (_directory, keys, auth) = enrolled().await;
+    let mut owner = wallet(&global, keys.clone(), csgn::MemoryStore::default(), false).await;
+    let member = auth.member();
+    let credential = auth.credential_id();
+    assert!(
+        !global
+            .wallet_device_bound(&owner, member, credential.as_ref(), [49; 32])
+            .await
+            .unwrap()
+    );
+    global
+        .authorize_wallet_device(&mut owner, &auth, [49; 32], NOW + 60, &|| NOW)
+        .await
+        .unwrap();
+    assert!(
+        global
+            .wallet_device_bound(&owner, member, credential.as_ref(), [49; 32])
+            .await
+            .unwrap()
+    );
+    // A different credential of the same member does not own this device key.
+    assert!(
+        !global
+            .wallet_device_bound(&owner, member, &[7; 16], [49; 32])
+            .await
+            .unwrap()
+    );
+    // Replacing the binding retires the old key.
+    global
+        .authorize_wallet_device(&mut owner, &auth, [50; 32], NOW + 60, &|| NOW)
+        .await
+        .unwrap();
+    assert!(
+        !global
+            .wallet_device_bound(&owner, member, credential.as_ref(), [49; 32])
+            .await
+            .unwrap()
+    );
+    assert!(
+        global
+            .wallet_device_bound(&owner, member, credential.as_ref(), [50; 32])
+            .await
+            .unwrap()
+    );
+    // A facade that does not own this wallet reads nothing.
+    let (foreign, _, _, _) = make().await;
+    assert!(matches!(
+        foreign
+            .wallet_device_bound(&owner, member, credential.as_ref(), [50; 32])
+            .await,
+        Err(Error::KeyMismatch)
+    ));
+    // A burned account (self-ban) has no bound device key, whatever its rows say.
+    global
+        .burn(
+            &subject(&member.to_string()),
+            Burn::Permanent(PermanentReason::SelfBan),
+            NOW,
+        )
+        .await
+        .unwrap();
+    assert!(
+        !global
+            .wallet_device_bound(&owner, member, credential.as_ref(), [50; 32])
+            .await
+            .unwrap()
+    );
+}
+
 // `reconcile_keys` capacity-guard kills (src/wallet/devices.rs): the guard
 // refuses with `Capacity` when EITHER revocation set exceeds
 // `cplc::MAX_ENTRIES`. Replacing the `||` with `&&` accepts an overflow on

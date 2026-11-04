@@ -268,6 +268,37 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
             checked_at: completed,
         })
     }
+    /// Server-internal, read-only (A13 M4): whether `device` is the current binding of the
+    /// passkey `credential` for `member`, not removed, and the account is not burned (self-ban
+    /// or legal block). Takes no Authentication: the wallet host calls it when it anchors or
+    /// renews a session by the device key, after the renewal signature and anchor checks. It
+    /// grants nothing and is not exposed beyond the host.
+    pub async fn wallet_device_bound<W: csgn::Store>(
+        &self,
+        wallet: &Wallet<S, W>,
+        member: ckyh::Uuid,
+        credential: &[u8],
+        device: [u8; 32],
+    ) -> Result<bool> {
+        let instance = wallet.instance.upgrade().ok_or(Error::Storage)?;
+        if !std::sync::Arc::ptr_eq(&instance, &self.wallet_instance) {
+            return Err(Error::KeyMismatch);
+        }
+        let subject = Subject::new(member.to_string())?;
+        match self.wallet_account(&subject).await {
+            Err(Error::Burned) => return Ok(false),
+            other => drop(other?),
+        }
+        let key = Key::new(BUCKET, subject.as_str());
+        let read = wallet.store.read(std::slice::from_ref(&key)).await?;
+        Ok(decode(&read, &key)?.is_some_and(|row| {
+            !row.removed.contains(&device)
+                && row
+                    .bindings
+                    .iter()
+                    .any(|binding| binding.credential == credential && binding.key == device)
+        }))
+    }
     /// Bind a public device only to the exact passkey that authenticated. The
     /// outbox is durable before replacing any old binding, even on lost replies.
     pub async fn authorize_wallet_device<W: csgn::Store>(
