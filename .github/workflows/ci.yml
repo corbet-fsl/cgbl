@@ -168,8 +168,4 @@ jobs:
     env:
       CARGO_PROFILE_TEST_OPT_LEVEL: '0'
 'on':
-  push:
-    branches:
-    - main
-  pull_request: null
-  workflow_dispatch: null
+  workflow_dispatch:
