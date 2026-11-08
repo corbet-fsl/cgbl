@@ -20,19 +20,19 @@ Invariants (rule -> enforcing test):
 - `development-gate` synthetic action never ships in release
   -> `src/tests/build_policy.rs::release_profile_emits_no_development_cfg` (+ CI probe)
 - Uniqueness reservations and holder bindings are permanent: NO RETURN
-  -> `tests/global.rs::durable_renewal_after_reopen_keeps_identity_and_rejects_new_secret`
+  -> `tests/it/global.rs::durable_renewal_after_reopen_keeps_identity_and_rejects_new_secret`
 - Blocks (legal order or self-ban) are terminal and bump the epoch
-  -> `tests/security.rs::permanent_self_ban_before_any_gate_creates_only_terminal_state_and_survives_reopening`
+  -> `tests/it/security.rs::permanent_self_ban_before_any_gate_creates_only_terminal_state_and_survives_reopening`
 - Storage only through `crlt`, per-key CAS, no ABA
-  -> `tests/storage.rs::sql_rows_persist_with_indexed_reads_and_no_aba`
+  -> `tests/it/storage.rs::sql_rows_persist_with_indexed_reads_and_no_aba`
 - Policy snapshots authenticated, scoped, strictly monotonic
-  -> `tests/global.rs::policies_are_authenticated_scoped_monotonic_and_bounded`
+  -> `tests/it/global.rs::policies_are_authenticated_scoped_monotonic_and_bounded`
 - One pending issuance slot per person; inclusive deadline guard
-  -> `tests/global.rs::guarded_issuance_observes_the_inclusive_deadline_and_refuses_the_following_tick`
+  -> `tests/it/global.rs::guarded_issuance_observes_the_inclusive_deadline_and_refuses_the_following_tick`
 - Paid gates idempotent; provider never rebilled on retry/CAS conflict
-  -> `tests/security.rs::slow_paid_check_survives_unrelated_writes_and_cancelled_delivery_without_rebilling`
+  -> `tests/it/security.rs::slow_paid_check_survives_unrelated_writes_and_cancelled_delivery_without_rebilling`
 - `forbid(unsafe_code)`; no request logging; redacted diagnostics
-  -> `tests/security.rs::authenticated_identifiers_enforce_bounds_and_redact_debug_output`
+  -> `tests/it/security.rs::authenticated_identifiers_enforce_bounds_and_redact_debug_output`
 
 Pointers: `src/facade.rs`, `src/storage.rs`, `src/payments.rs`,
 `docs/CONTRACT.md`, `docs/COVERAGE.md`, `.ci/verify.sh`.
