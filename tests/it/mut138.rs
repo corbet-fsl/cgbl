@@ -6,10 +6,10 @@
 //! `observed_at / 86_400 / 86_400`, which is the epoch for any clock in the
 //! second day, so `issued_at` is 0 instead of one day.
 
+use crate::SoftwareToken;
 use cgbl::{storage::MemoryStore, *};
 use cpsd::rand::{SeedableRng, rngs::StdRng};
 use std::{collections::BTreeSet, sync::Arc};
-use webauthn_authenticator_rs::{AuthenticatorBackend, softtoken::SoftToken};
 
 const DAY: u64 = 86_400;
 const NOW: u64 = 100;
@@ -183,7 +183,7 @@ async fn enrolled() -> (
     );
     let owner = keys.clone();
     let authentication = tokio::task::spawn_blocking(move || {
-        let mut token = SoftToken::new(true).unwrap().0;
+        let mut token = SoftwareToken::new(true).unwrap().0;
         let member = ckyh::Uuid::from_u128(27);
         let (mut challenge, pending) = owner.start_registration(member).unwrap();
         challenge

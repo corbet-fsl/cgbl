@@ -1,6 +1,6 @@
 //! Genuine Global/Keyhole/signing/Beacon owners, never a member Authority fixture.
 use super::*;
-use webauthn_authenticator_rs::{AuthenticatorBackend, softtoken::SoftToken};
+use crate::SoftwareToken;
 #[path = "birth.rs"]
 mod birth;
 
@@ -73,7 +73,7 @@ async fn enrolled() -> (
     );
     let owner = keys.clone();
     let authentication = tokio::task::spawn_blocking(move || {
-        let mut token = SoftToken::new(true).unwrap().0;
+        let mut token = SoftwareToken::new(true).unwrap().0;
         let member = ckyh::Uuid::from_u128(27);
         let (mut challenge, pending) = owner.start_registration(member).unwrap();
         challenge
@@ -1032,8 +1032,10 @@ async fn revoked_credentials(
     count: usize,
 ) {
     tokio::task::spawn_blocking(move || {
-        let mut token = SoftToken::new(true).unwrap().0;
         for _ in 0..count {
+            // One token per credential: the server excludes the member's existing
+            // credentials, so each new passkey comes from a fresh device.
+            let mut token = SoftwareToken::new(true).unwrap().0;
             let (mut challenge, pending) = keys.start_registration(member).unwrap();
             challenge
                 .public_key

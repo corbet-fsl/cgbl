@@ -82,7 +82,7 @@ async fn born() -> (
     );
     let owner = keys.clone();
     let authentication = tokio::task::spawn_blocking(move || {
-        let mut token = SoftToken::new(true).unwrap().0;
+        let mut token = SoftwareToken::new(true).unwrap().0;
         let member = ckyh::Uuid::from_u128(MEMBER);
         let (mut challenge, pending) = owner
             .start_initial_registration(member, Some(COMMITMENT))
@@ -318,7 +318,7 @@ async fn a_step_up_binding_or_a_second_passkey_closes_the_birth_device() {
     let (_other, keys, auth) = born().await;
     let owner = keys.clone();
     tokio::task::spawn_blocking(move || {
-        let mut token = SoftToken::new(true).unwrap().0;
+        let mut token = SoftwareToken::new(true).unwrap().0;
         let (mut challenge, pending) = owner
             .start_registration(ckyh::Uuid::from_u128(MEMBER))
             .unwrap();
