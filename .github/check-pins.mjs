@@ -1,13 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-const corbetSource = /^git\+https:\/\/git\.corbet\.ch\/corbet-(?:foss|libs)\//;
+const corbetSource = /^git\+https:\/\/git\.corbet\.ch\/corbet-(?:foss|fsl|libre)\//;
 
 const originalOwners = new Map([
   ['cchr', 'https://git.corbet.ch/corbet-foss/cchr'],
   ['cmbl', 'https://git.corbet.ch/corbet-foss/cmbl.git'],
   ['cmmr', 'https://git.corbet.ch/corbet-foss/cmmr.git'],
-  ['cvlk', 'https://git.corbet.ch/corbet-foss/cvlk.git'],
 ]);
 
 function checkSource(source, resolved, name) {

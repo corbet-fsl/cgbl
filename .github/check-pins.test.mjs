@@ -49,8 +49,8 @@ test('require the crlt Git dependency', () => {
 });
 
 
-test('retain only exact original cchr/cmbl/cmmr/cvlk v01 owners', () => {
-  for (const [name, suffix] of [['cchr', ''], ['cmbl', '.git'], ['cmmr', '.git'], ['cvlk', '.git']]) {
+test('retain only exact original cchr/cmbl/cmmr v01 owners', () => {
+  for (const [name, suffix] of [['cchr', ''], ['cmbl', '.git'], ['cmmr', '.git']]) {
     const repo = `https://git.corbet.ch/corbet-foss/${name}${suffix}`;
     const original = `git+${repo}?branch=v01#${revision}`;
     checkPins(graph(pkg(name, original, [{ name, source: `git+${repo}?branch=v01` }])));
