@@ -14,7 +14,7 @@ ORIGINAL = {
     'cchr': 'https://git.corbet.ch/corbet-foss/cchr',
     'cmbl': 'https://git.corbet.ch/corbet-foss/cmbl.git',
     'cmmr': 'https://git.corbet.ch/corbet-foss/cmmr.git',
-    'cvlk': 'https://git.corbet.ch/corbet-foss/cvlk.git',
+    'cvlk': 'https://git.corbet.ch/corbet-libre/cvlk.git',
 }
 
 
