@@ -6,7 +6,6 @@ export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-always}"
 export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
 
 rustc --version
-bash .ci/update-our-crates.sh
 cargo fmt --all --check
 node --test .github/check-pins.test.mjs
 cargo metadata --locked --format-version 1 > dependency-metadata.json
