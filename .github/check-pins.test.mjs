@@ -49,18 +49,18 @@ test('require the crlt Git dependency', () => {
 });
 
 
-test('v01 selectors are rejected after the 2026-11 org move', () => {
+test('retain only exact original cchr/cmbl/cmmr v01 owners', () => {
   for (const [name, suffix] of [['cchr', ''], ['cmbl', '.git'], ['cmmr', '.git']]) {
     const repo = `https://git.corbet.ch/corbet-libre/${name}${suffix}`;
-    const moved = `git+${repo}?branch=main#${revision}`;
-    checkPins(graph(pkg(name, moved, [{ name, source: `git+${repo}?branch=main` }])));
-    for (const invalid of [moved.replace('branch=main', 'branch=v01'),
-      moved.replace('branch=main', 'branch=other'),
-      moved.replace('branch=main', 'branch=main&branch=main'),
-      moved.replace(`#${revision}`, '#short')]) {
+    const original = `git+${repo}?branch=v01#${revision}`;
+    checkPins(graph(pkg(name, original, [{ name, source: `git+${repo}?branch=v01` }])));
+    for (const invalid of [original.replace('branch=v01', 'branch=main'),
+      original.replace('branch=v01', 'branch=other'),
+      original.replace('branch=v01', 'branch=v01&branch=v01'),
+      original.replace(repo, `${repo}.git`), original.replace(`#${revision}`, '#short')]) {
       assert.throws(() => checkPins(graph(pkg(name, invalid))), /revision pin/);
     }
-    assert.throws(() => checkPins(graph(pkg('foreign', moved.replace('branch=main', 'branch=v01')))), /revision pin/);
-    assert.throws(() => checkPins(graph(pkg(name, moved), pkg(name, moved))), /duplicated/);
+    assert.throws(() => checkPins(graph(pkg('foreign', original))), /revision pin/);
+    assert.throws(() => checkPins(graph(pkg(name, original), pkg(name, original))), /duplicated/);
   }
 });
