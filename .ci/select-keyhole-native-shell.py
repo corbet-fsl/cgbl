@@ -13,7 +13,7 @@ if len(selected) != 1:
     raise SystemExit("Expected exactly one actual Keyhole owner")
 package = selected[0]
 match = re.fullmatch(
-    r"git\+https://git\.corbet\.ch/corbet-foss/ckyh\?branch=main#([0-9a-f]{40})",
+    r"git\+https://git\.corbet\.ch/corbet-libre/ckyh\?branch=main#([0-9a-f]{40})",
     package.get("source") or "",
 )
 if not match:

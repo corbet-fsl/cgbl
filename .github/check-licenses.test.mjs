@@ -23,7 +23,7 @@ const packages = [
   { name: 'finl_unicode', version: '1.5.0', source: registry,
     license: '(MIT OR Apache-2.0) AND Unicode-DFS-2016' },
   ...['cblc', 'cgts', 'cplc'].map(name => ({ name, version: '0.0.0',
-    source: `git+https://git.corbet.ch/corbet-libs/${name}?branch=main#${'a'.repeat(40)}`,
+    source: `git+https://git.corbet.ch/corbet-fsl/${name}?branch=main#${'a'.repeat(40)}`,
     license: 'FSL-1.1-ALv2' })),
 ];
 check(packages, true);
@@ -38,7 +38,7 @@ check([{ name: 'cgbl', source: null, license: 'FSL-1.1-ALv2' }], true);
 check([{ name: 'cgbl', source: registry, license: 'FSL-1.1-ALv2' }], false);
 for (const suffix of ['?branch=v01#' + 'a'.repeat(40), '?branch=main#a',
   '?branch=main#' + 'a'.repeat(40) + '-extra']) {
-  check([{ ...packages.at(-1), source: 'git+https://git.corbet.ch/corbet-libs/cplc' + suffix }], false);
+  check([{ ...packages.at(-1), source: 'git+https://git.corbet.ch/corbet-fsl/cplc' + suffix }], false);
 }
 check([{ name: 'original-permissive', license: 'MIT' }], true);
 check([{ name: 'unknown', license: null }], false);

@@ -9,13 +9,9 @@ from urllib.parse import parse_qs, urlsplit
 
 FIRST_PARTY = re.compile(r"^(?:git\+)?https://git\.corbet\.ch/(?:corbet-(?:foss|libs|libre|fsl)|cmty(?:meet|mt))/")
 SHA = re.compile(r"^[0-9a-f]{40}$")
-# Retained original protocol owners only; this is not a generic branch exception.
-ORIGINAL = {
-    'cchr': 'https://git.corbet.ch/corbet-foss/cchr',
-    'cmbl': 'https://git.corbet.ch/corbet-foss/cmbl.git',
-    'cmmr': 'https://git.corbet.ch/corbet-foss/cmmr.git',
-    'cvlk': 'https://git.corbet.ch/corbet-libre/cvlk.git',
-}
+# The v01 original-owner exceptions ended with the 2026-11 org move (every pin is
+# branch = main at its new owner); the map stays as the extension point.
+ORIGINAL = {}
 
 
 def owner_branch(repo, package):
@@ -61,7 +57,7 @@ def rejects(function, value):
 
 
 def self_test():
-    repo = 'https://git.corbet.ch/corbet-foss/example'
+    repo = 'https://git.corbet.ch/corbet-libre/example'
     source = 'git+' + repo + '?branch=main#' + 'a' * 40
     package = {'name': 'example', 'source': source}
     check_lock([package])

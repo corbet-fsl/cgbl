@@ -4,9 +4,7 @@ import { pathToFileURL } from 'node:url';
 const corbetSource = /^git\+https:\/\/git\.corbet\.ch\/corbet-(?:foss|fsl|libre|libs)\//;
 
 const originalOwners = new Map([
-  ['cchr', 'https://git.corbet.ch/corbet-foss/cchr'],
-  ['cmbl', 'https://git.corbet.ch/corbet-foss/cmbl.git'],
-  ['cmmr', 'https://git.corbet.ch/corbet-foss/cmmr.git'],
+  // The v01 original-owner exceptions ended with the 2026-11 org move.
 ]);
 
 function checkSource(source, resolved, name) {
