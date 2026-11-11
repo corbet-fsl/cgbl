@@ -5,7 +5,7 @@ import { checkPins } from './check-pins.mjs';
 const revision = '6b94dacd7fa04aa8847c62c6471a1fc5c0f6c9dc';
 const older = '9c076b1e4050529406df27533e12c8e0dd1fc0db';
 const source = (name, rev = revision) =>
-  `git+https://git.corbet.ch/corbet-foss/${name}?rev=${rev}#${rev}`;
+  `git+https://git.corbet.ch/corbet-libre/${name}?rev=${rev}#${rev}`;
 const pkg = (name, source = null, dependencies = []) => ({ name, source, dependencies });
 const graph = (...packages) => ({
   packages: [pkg('crbk'), pkg('crlt', source('crlt')), ...packages],
@@ -25,7 +25,7 @@ test('reject duplicate direct and transitive Corbet packages', () => {
 
 test('reject other branches, tags, unqualified and abbreviated revisions', () => {
   for (const query of ['branch=develop', 'tag=v1', '', `rev=${revision.slice(0, 7)}`]) {
-    const floating = `git+https://git.corbet.ch/corbet-foss/csgn?${query}#${revision}`;
+    const floating = `git+https://git.corbet.ch/corbet-libre/csgn?${query}#${revision}`;
     assert.throws(() => checkPins(graph(pkg('csgn', floating))), /revision pin/);
   }
 });
@@ -36,10 +36,10 @@ test('reject a resolved revision different from its pin', () => {
 });
 
 test('accept main declarations with a unique complete resolution', () => {
-  const dependency = { source: 'git+https://git.corbet.ch/corbet-foss/cpns?branch=main' };
+  const dependency = { source: 'git+https://git.corbet.ch/corbet-libre/cpns?branch=main' };
   checkPins(graph(
     pkg('cgrd', source('cgrd'), [dependency]),
-    pkg('cpns', `git+https://git.corbet.ch/corbet-foss/cpns?branch=main#${revision}`),
+    pkg('cpns', `git+https://git.corbet.ch/corbet-libre/cpns?branch=main#${revision}`),
   ));
 });
 
@@ -49,18 +49,18 @@ test('require the crlt Git dependency', () => {
 });
 
 
-test('retain only exact original cchr/cmbl/cmmr v01 owners', () => {
+test('v01 selectors are rejected after the 2026-11 org move', () => {
   for (const [name, suffix] of [['cchr', ''], ['cmbl', '.git'], ['cmmr', '.git']]) {
-    const repo = `https://git.corbet.ch/corbet-foss/${name}${suffix}`;
-    const original = `git+${repo}?branch=v01#${revision}`;
-    checkPins(graph(pkg(name, original, [{ name, source: `git+${repo}?branch=v01` }])));
-    for (const invalid of [original.replace('branch=v01', 'branch=main'),
-      original.replace('branch=v01', 'branch=other'),
-      original.replace('branch=v01', 'branch=v01&branch=v01'),
-      original.replace(repo, `${repo}.git`), original.replace(`#${revision}`, '#short')]) {
+    const repo = `https://git.corbet.ch/corbet-libre/${name}${suffix}`;
+    const moved = `git+${repo}?branch=main#${revision}`;
+    checkPins(graph(pkg(name, moved, [{ name, source: `git+${repo}?branch=main` }])));
+    for (const invalid of [moved.replace('branch=main', 'branch=v01'),
+      moved.replace('branch=main', 'branch=other'),
+      moved.replace('branch=main', 'branch=main&branch=main'),
+      moved.replace(`#${revision}`, '#short')]) {
       assert.throws(() => checkPins(graph(pkg(name, invalid))), /revision pin/);
     }
-    assert.throws(() => checkPins(graph(pkg('foreign', original))), /revision pin/);
-    assert.throws(() => checkPins(graph(pkg(name, original), pkg(name, original))), /duplicated/);
+    assert.throws(() => checkPins(graph(pkg('foreign', moved.replace('branch=main', 'branch=v01')))), /revision pin/);
+    assert.throws(() => checkPins(graph(pkg(name, moved), pkg(name, moved))), /duplicated/);
   }
 });

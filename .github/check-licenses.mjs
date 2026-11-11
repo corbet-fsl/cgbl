@@ -59,7 +59,7 @@ const owned = new Set(["cblc", "cgts", "cplc"]);
 function reviewedPackage(p) {
   if (p.name === "cgbl" && p.source == null && p.license === "FSL-1.1-ALv2") return true;
   if (owned.has(p.name) && p.version === "0.0.0" && p.license === "FSL-1.1-ALv2") {
-    const prefix = `git+https://git.corbet.ch/corbet-libs/${p.name}?branch=main#`;
+    const prefix = `git+https://git.corbet.ch/corbet-fsl/${p.name}?branch=main#`;
     return typeof p.source === "string" && p.source.startsWith(prefix)
       && /^[0-9a-f]{40}$/.test(p.source.slice(prefix.length));
   }
