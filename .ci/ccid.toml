@@ -38,3 +38,6 @@ workflow = "resolve"
 command = ["bash", ".ci/run-cached.sh"]
 
 [check_shell]
+
+[security]
+dependencies = "cargo-deny"
