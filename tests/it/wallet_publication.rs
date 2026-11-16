@@ -26,7 +26,10 @@
 //! - `published_feed` (303:25 guard -> true, 303:51 `&&` -> `||`): after
 //!   `record_ended` the recheck refuses with `Signature` and fences the view.
 //! - `rotate` (346:30 `/` -> `%`/`*`, 346:39 `*` -> `+`/`/`): the committed
-//!   signer state carries the day floor of the rotation time.
+//!   signer state carries the day floor of the rotation time. The rotation
+//!   itself takes the recorded proof path: it retains the transition, the new
+//!   ring publishes chained from the pinned one, and a reopen under the new
+//!   key publishes again.
 //!
 //! The remaining brief-listed mutants are genuinely unreachable here and are
 //! reported in PROGRESS instead of tested:
@@ -391,22 +394,110 @@ async fn published_feed_after_record_ended_refuses_and_fences() {
     assert!(wallet.key_ring().is_err());
 }
 
-// ---- rotate floor (346:30 `/` -> `%`/`*`, 346:39 `*` -> `+`/`/`) ----
+// ---- rotate: proof path and day floor (346:30 `/` -> `%`/`*`, 346:39 `*` -> `+`/`/`) ----
+
+/// The retained wallet state as the global store holds it.
+async fn stored_wallet_state(store: &MemoryStore) -> serde_json::Value {
+    let key = storage::Key::new("wallet", "publications");
+    let read = store.read(std::slice::from_ref(&key)).await.unwrap();
+    serde_json::from_slice(&read.records[&key].value).unwrap()
+}
+
+/// Each document of a feed verifies under `ring` and was signed by `signer`.
+fn signed_by(feed: &cbcn::Feed, ring: &csgn::KeyRing, signer: csgn::KeyId, now: u64) {
+    for (bytes, kind) in [
+        (&feed.manifest, csgn::Kind::SettingsSnapshot),
+        (&feed.settings, csgn::Kind::SettingsSnapshot),
+        (&feed.schema, csgn::Kind::SchemaSnapshot),
+        (&feed.schema_versions, csgn::Kind::SchemaSnapshot),
+        (&feed.communities, csgn::Kind::CommunitiesSnapshot),
+        (&feed.revocations, csgn::Kind::RevocationListSnapshot),
+    ] {
+        assert_eq!(ring.verify(bytes, kind, now).unwrap().key_id(), signer);
+    }
+}
 
 #[tokio::test(flavor = "multi_thread")]
 async fn rotation_commits_the_day_floor_to_signer_state() {
-    let (global, _) = setup().await;
+    let (global, store) = setup().await;
     let (_directory, keys) = passkeys().await;
     let signer_store = csgn::MemoryStore::default();
     let mut wallet = open_wallet(&global, keys, signer_store.clone(), 47, NOW).await;
-    // A plain rotation cannot retain a transition (the writer fences), but
-    // the signer commit must carry the day floor of the rotation time. Every
-    // floor mutant records a different activation instant instead.
-    assert!(wallet.rotate(wallet_key(48), DAY + 100).await.is_err());
+    // The rotation goes through the recorded proof path: it succeeds, the
+    // wallet retains the transition proof, and the signer commit carries the
+    // day floor of the rotation time. Every floor mutant records a different
+    // activation instant instead.
+    wallet.rotate(wallet_key(48), DAY + 100).await.unwrap();
     let saved = csgn::Store::load(&signer_store, "wallet")
         .await
         .unwrap()
         .unwrap();
-    let activated = saved.state.key_ring().active().unwrap().activated_at();
-    assert_eq!(activated, DAY);
+    let active = saved.state.key_ring().active().unwrap();
+    assert_eq!(active.activated_at(), DAY);
+    assert_eq!(active.key_id(), wallet_key(48).key_id());
+    let stored = stored_wallet_state(&store).await;
+    let transitions = stored["transitions"].as_array().unwrap();
+    assert_eq!(transitions.len(), 1);
+    assert_eq!(transitions[0]["revision"], 1);
+    assert!(!transitions[0]["proof"].as_array().unwrap().is_empty());
+    // The signer acknowledged the retained proof: the ring is usable at once.
+    let ring = wallet.key_ring().unwrap();
+    assert_eq!(ring.to_cbor(), saved.state.key_ring().to_cbor());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn rotation_publishes_the_new_ring_chained_from_the_pinned_one() {
+    let (global, _) = setup().await;
+    let (_directory, keys) = passkeys().await;
+    let mut wallet = open_wallet(&global, keys, csgn::MemoryStore::default(), 47, NOW).await;
+    // A device pins the ring of the feed before the rotation.
+    let pinned = wallet.trust_feed(NOW).await.unwrap();
+    let old = csgn::KeyRing::from_cbor(&pinned.key_ring).unwrap();
+    assert!(pinned.key_transitions.is_empty());
+    wallet.rotate(wallet_key(48), DAY + 100).await.unwrap();
+    let ring = wallet.key_ring().unwrap().clone();
+    assert_ne!(ring, old);
+    let feed = wallet.trust_feed(DAY + 100).await.unwrap();
+    assert!(feed.revision > pinned.revision);
+    assert!(feed.policy_epoch > pinned.policy_epoch);
+    assert_eq!(feed.key_ring, ring.to_cbor());
+    // The feed carries the proof that chains the pinned ring to the new one.
+    assert_eq!(feed.key_transitions.len(), 1);
+    assert_eq!(feed.key_transitions[0].revision, 1);
+    let transition =
+        csgn::verify_transition_at_issue(&old, &feed.key_transitions[0].proof).unwrap();
+    assert_eq!(transition.revision(), 1);
+    assert_eq!(transition.previous(), &old);
+    assert_eq!(transition.next(), &ring);
+    // Every document of the new feed is signed under the new key.
+    signed_by(&feed, &ring, wallet_key(48).key_id(), DAY + 100);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_rotated_wallet_reopens_under_the_new_key_and_publishes() {
+    let (global, _) = setup().await;
+    let (_directory, keys) = passkeys().await;
+    let signer_store = csgn::MemoryStore::default();
+    let mut wallet = open_wallet(&global, keys.clone(), signer_store.clone(), 47, NOW).await;
+    let pinned = wallet.trust_feed(NOW).await.unwrap();
+    let old = csgn::KeyRing::from_cbor(&pinned.key_ring).unwrap();
+    wallet.rotate(wallet_key(48), DAY + 100).await.unwrap();
+    let ring = wallet.key_ring().unwrap().clone();
+    drop(wallet);
+    // A restarted host opens the signer with the key it provisioned last.
+    let signer = csgn::PersistentSigner::open(signer_store, "wallet", wallet_key(48), DAY)
+        .await
+        .unwrap();
+    let mut reopened = global
+        .open_wallet(signer, configuration(), keys, DAY + 200)
+        .await
+        .unwrap();
+    assert_eq!(reopened.key_ring().unwrap(), &ring);
+    let feed = reopened.trust_feed(DAY + 200).await.unwrap();
+    assert_eq!(feed.key_ring, ring.to_cbor());
+    assert_eq!(feed.key_transitions.len(), 1);
+    let transition =
+        csgn::verify_transition_at_issue(&old, &feed.key_transitions[0].proof).unwrap();
+    assert_eq!(transition.next(), &ring);
+    signed_by(&feed, &ring, wallet_key(48).key_id(), DAY + 200);
 }

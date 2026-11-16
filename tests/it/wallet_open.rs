@@ -299,22 +299,45 @@ async fn day_aligned_nonzero_activation_opens() {
 async fn rotated_signer_without_retention_refuses_key_ring() {
     let global = global().await;
     let (_directory, keys) = passkeys(RP, &[url(ORIGIN)]).await;
-    let mut wallet: WalletOwner = global
+    let signer_store = csgn::MemoryStore::default();
+    let created = csgn::PersistentSigner::create(
+        signer_store.clone(),
+        "wallet",
+        csgn::SecretKey::from_seed(&mut [47; 32]),
+        0,
+        30 * DAY,
+    )
+    .await
+    .unwrap();
+    let wallet: WalletOwner = global
         .open_wallet(
-            signer("wallet", 47, 0, 30 * DAY).await,
+            created,
             configuration_with(RP, ORIGIN, SNAPSHOT),
-            keys,
+            keys.clone(),
             NOW,
         )
         .await
         .unwrap();
-    // The plain rotation changes the ring without retaining a transition, so
-    // the writer is fenced: every `key_ring` variant refuses here.
-    assert!(
-        wallet
-            .rotate(csgn::SecretKey::from_seed(&mut [48; 32]), NOW)
-            .await
-            .is_err()
-    );
-    assert!(wallet.key_ring().is_err());
+    drop(wallet);
+    // A plain rotation outside the wallet changes the ring without a
+    // transition proof the wallet could retain, so the writer is fenced: no
+    // wallet opens on that ring. (`Wallet::rotate` takes the proof path.)
+    let mut rotated = csgn::PersistentSigner::open(
+        signer_store,
+        "wallet",
+        csgn::SecretKey::from_seed(&mut [47; 32]),
+        0,
+    )
+    .await
+    .unwrap();
+    rotated
+        .rotate(csgn::SecretKey::from_seed(&mut [48; 32]), 0)
+        .await
+        .unwrap();
+    assert!(matches!(
+        global
+            .open_wallet(rotated, configuration_with(RP, ORIGIN, SNAPSHOT), keys, NOW,)
+            .await,
+        Err(Error::KeyMismatch)
+    ));
 }
