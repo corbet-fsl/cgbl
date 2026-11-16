@@ -342,8 +342,9 @@ impl<S: Store, K: csgn::Store> Wallet<S, K> {
     pub async fn rotate(&mut self, key: csgn::SecretKey, now: u64) -> Result<()> {
         self.sample(now)?;
         let retained = self.current().await?;
+        let until = self.until(&retained.state, now)?;
         self.signer
-            .rotate(key, now / 86_400 * 86_400)
+            .rotate_with_proof(key, now / 86_400 * 86_400, until)
             .await
             .map_err(|_| Error::Signature)?;
         self.require_live()?;
