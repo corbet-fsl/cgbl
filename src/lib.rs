@@ -22,6 +22,12 @@ pub use facade::{Global, Limits};
 pub use fingerprint::FingerprintKey;
 pub use stamp::{STAMP_MAX_PER_DAY, StampRate};
 pub use types::*;
+
+/// A community installs the global status at least this often (seconds) and accepts no passport
+/// presentation while its installed status is older (member-local design 2.4, C1/C2). cgbl
+/// re-signs its status whenever the current one is older than half of it. Equal to
+/// `cmbr::GLOBAL_STATUS_MAX_LAG`; cvld asserts the equality.
+pub const GLOBAL_STATUS_MAX_LAG: u64 = 3_600;
 pub use wallet::{
     EndedChain, EndedReason, MAX_ENDED, Wallet, WalletBirthStatement, WalletDeviceObservation,
     WalletMutation, WalletPasskeyCertificate, WalletPublicationConfig, WalletShutdown,

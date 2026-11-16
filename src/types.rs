@@ -148,8 +148,11 @@ pub struct Revocation {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Status {
-    /// Wire version, currently two.
+    /// Wire version, currently three (v3 adds the exact signed `issued_at`).
     pub version: u32,
+    /// Exact second this status was signed (not day-granular like the COSE times). A community
+    /// refuses passport presentations once `now - issued_at` exceeds `GLOBAL_STATUS_MAX_LAG`.
+    pub issued_at: u64,
     /// Exact domain separator: global-passport-status.
     pub purpose: String,
     /// Global scope.

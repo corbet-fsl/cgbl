@@ -980,12 +980,12 @@ async fn public_status_after_rotation_reuses_the_unchanged_snapshot() {
     // Rotate strictly before the snapshot's expiry so the retired key is
     // retained and the cached snapshot still verifies.
     global
-        .rotate_signing_key(csgn::SecretKey::from_seed(&mut [4; 32]), DAY + 100)
+        .rotate_signing_key(csgn::SecretKey::from_seed(&mut [4; 32]), 500)
         .await
         .unwrap();
-    let second = global.public_status(DAY + 200, 2 * DAY).await.unwrap();
+    let second = global.public_status(600, 2 * DAY).await.unwrap();
     assert_eq!(second, first);
-    Status::verify(&second, global.key_ring().unwrap(), scope, 1, 1, DAY + 200).unwrap();
+    Status::verify(&second, global.key_ring().unwrap(), scope, 1, 1, 600).unwrap();
 }
 
 // ---- signed_status / rotate (facade.rs:785, 812, 813) ----
@@ -1133,4 +1133,88 @@ async fn claimed_holder_tag_maps_to_duplicate() {
             .await,
         Err(Error::Duplicate)
     ));
+}
+
+// ---- Status v3: exact signed issued_at, age-driven re-sign (member-local 2.4 C1, C6 tests 7, 9) ----
+
+#[tokio::test]
+async fn status_v3_carries_the_exact_issue_second_and_is_reused_while_younger_than_half_the_lag() {
+    let scope = "statv3";
+    let (mut global, _) = open_memory(scope, 60, 8, issuer_for(1, &["phone"])).await;
+    install(&global, &base_policy(scope, 1, 1, COHORT), 10)
+        .await
+        .unwrap();
+    let first = global.public_status(1_000, 2 * DAY).await.unwrap();
+    let status = Status::verify(&first, global.key_ring().unwrap(), scope, 1, 1, 1_000).unwrap();
+    // Exact, not day-granular like the COSE times.
+    assert_eq!((status.version, status.issued_at), (3, 1_000));
+    let half = GLOBAL_STATUS_MAX_LAG / 2;
+    assert_eq!(
+        global.public_status(1_000 + half, 2 * DAY).await.unwrap(),
+        first
+    );
+    // Older than half the lag, epoch unchanged: re-signed with a new exact issued_at.
+    let resigned = global
+        .public_status(1_000 + half + 1, 2 * DAY)
+        .await
+        .unwrap();
+    assert_ne!(resigned, first);
+    let again = Status::verify(
+        &resigned,
+        global.key_ring().unwrap(),
+        scope,
+        1,
+        1,
+        1_000 + half + 1,
+    )
+    .unwrap();
+    assert_eq!(again.issued_at, 1_000 + half + 1);
+    // Only the freshness moved: the epoch, revision, expiry and keys are those of the first.
+    assert_eq!(
+        (again.epoch, again.policy_revision, again.shared_expiry),
+        (status.epoch, status.policy_revision, status.shared_expiry)
+    );
+    assert_eq!(again.issuer_public_key, status.issuer_public_key);
+}
+
+#[tokio::test]
+async fn a_status_issued_in_the_future_is_never_reused() {
+    let scope = "statfut";
+    let (mut global, _) = open_memory(scope, 60, 8, issuer_for(1, &["phone"])).await;
+    install(&global, &base_policy(scope, 1, 1, COHORT), 10)
+        .await
+        .unwrap();
+    let late = global.public_status(5_000, 2 * DAY).await.unwrap();
+    // Asking again at an earlier clock must not hand back a status stamped later than now.
+    let earlier = global.public_status(4_000, 2 * DAY).await;
+    if let Ok(bytes) = earlier {
+        let status =
+            Status::verify(&bytes, global.key_ring().unwrap(), scope, 1, 1, 4_000).unwrap();
+        assert!(status.issued_at <= 4_000);
+        assert_ne!(bytes, late);
+    }
+}
+
+#[test]
+fn a_version_2_status_is_refused_and_the_constants_agree() {
+    assert_eq!(GLOBAL_STATUS_MAX_LAG, 3_600);
+    let v2 = r#"{"version":2,"purpose":"global-passport-status","scope":"s","epoch":1,"policy_revision":1,"shared_expiry":86400,"issuer_public_key":[]}"#;
+    assert!(serde_json::from_str::<Status>(v2).is_err());
+}
+
+#[tokio::test]
+async fn only_issued_at_may_differ_for_a_status_to_count_as_a_fresh_resign() {
+    let scope = "statfresh";
+    let (mut global, _) = open_memory(scope, 60, 8, issuer_for(1, &["phone"])).await;
+    install(&global, &base_policy(scope, 1, 1, COHORT), 10)
+        .await
+        .unwrap();
+    let bytes = global.public_status(1_000, 2 * DAY).await.unwrap();
+    let old = Status::verify(&bytes, global.key_ring().unwrap(), scope, 1, 1, 1_000).unwrap();
+    let mut fresh = old.clone();
+    fresh.issued_at += 1_801;
+    assert!(cbcn::document::Document::same_but_fresh(&old, &fresh));
+    let mut other = fresh.clone();
+    other.policy_revision += 1;
+    assert!(!cbcn::document::Document::same_but_fresh(&old, &other));
 }

@@ -744,6 +744,8 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
                     && ring_current
                     && current.stamp_keys == stamp_ring
                     && lifetime
+                    && current.issued_at <= now
+                    && now - current.issued_at <= crate::GLOBAL_STATUS_MAX_LAG / 2
                 {
                     let latest = self.read(vec![crate::stamp::ring_key()]).await?;
                     if latest.revisions != read.revisions {
@@ -766,7 +768,8 @@ impl<S: Store, K: csgn::Store, I: cpsd::IssuanceStore> Global<S, K, I> {
         let state: State = get(&read, &meta("state"))?.ok_or(Error::NoPolicy)?;
         let stamp_keys = crate::stamp::recorded_ring(&read)?;
         let status = Status {
-            version: 2,
+            version: 3,
+            issued_at: now,
             purpose: "global-passport-status".into(),
             scope: self.store.scope().into(),
             epoch: state.epoch()?,
@@ -836,6 +839,7 @@ impl Status {
         let value: Self =
             serde_json::from_slice(verified.payload()).map_err(|_| Error::Encoding)?;
         value.validate_publication(ring.issuer())?;
+        time(value.issued_at)?;
         if value.scope != scope
             || value.epoch < minimum_epoch
             || value.policy_revision < minimum_revision
@@ -846,7 +850,7 @@ impl Status {
     }
     fn validate_publication(&self, issuer: &str) -> Result<()> {
         if issuer != format!("cgbl:{}", self.scope)
-            || self.version != 2
+            || self.version != 3
             || self.purpose != "global-passport-status"
             || !self.shared_expiry.is_multiple_of(86_400)
         {
@@ -867,7 +871,13 @@ impl cbcn::document::Document for Status {
         Ok(cbcn::document::Version {
             revision: self.policy_revision,
             epoch: self.epoch,
+            fresh: self.issued_at,
         })
+    }
+    fn same_but_fresh(&self, successor: &Self) -> bool {
+        let mut older = self.clone();
+        older.issued_at = successor.issued_at;
+        older == *successor
     }
 }
 
