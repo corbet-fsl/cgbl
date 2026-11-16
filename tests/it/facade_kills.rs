@@ -1184,20 +1184,54 @@ async fn a_status_issued_in_the_future_is_never_reused() {
     install(&global, &base_policy(scope, 1, 1, COHORT), 10)
         .await
         .unwrap();
-    let late = global.public_status(5_000, 2 * DAY).await.unwrap();
-    // Asking again at an earlier clock must not hand back a status stamped later than now.
+    global.public_status(5_000, 2 * DAY).await.unwrap();
+    // The beacon's clock high-water is 5,000: an earlier clock is a regression, never a reuse.
     let earlier = global.public_status(4_000, 2 * DAY).await;
-    if let Ok(bytes) = earlier {
-        let status =
-            Status::verify(&bytes, global.key_ring().unwrap(), scope, 1, 1, 4_000).unwrap();
-        assert!(status.issued_at <= 4_000);
-        assert_ne!(bytes, late);
-    }
+    assert!(matches!(earlier, Err(Error::Signature)), "{earlier:?}");
 }
 
-#[test]
-fn a_version_2_status_is_refused_and_the_constants_agree() {
+#[tokio::test]
+async fn a_status_with_a_wrong_version_or_unusable_issued_at_is_refused() {
+    let scope = "statver";
+    let (mut global, _) = open_memory(scope, 60, 8, issuer_for(1, &["phone"])).await;
+    install(&global, &base_policy(scope, 1, 1, COHORT), 10)
+        .await
+        .unwrap();
     assert_eq!(GLOBAL_STATUS_MAX_LAG, 3_600);
+    let bytes = global.public_status(1_000, 2 * DAY).await.unwrap();
+    let good = Status::verify(&bytes, global.key_ring().unwrap(), scope, 1, 1, 1_000).unwrap();
+    assert_eq!(good.version, 3);
+    let mut signer = csgn::PersistentSigner::create(
+        csgn::MemoryStore::default(),
+        format!("cgbl:{scope}"),
+        csgn::SecretKey::from_seed(&mut [4; 32]),
+        0,
+        30 * DAY,
+    )
+    .await
+    .unwrap();
+    let mut v2 = good.clone();
+    v2.version = 2;
+    let mut zero = good.clone();
+    zero.issued_at = 0;
+    for (status, policy) in [(v2, true), (zero, false)] {
+        let cose = signer
+            .sign(
+                csgn::Kind::SettingsSnapshot,
+                &serde_json::to_vec(&status).unwrap(),
+                0,
+                2 * DAY,
+            )
+            .await
+            .unwrap();
+        let got = Status::verify(&cose, signer.key_ring().unwrap(), scope, 1, 1, 1_000);
+        match got.unwrap_err() {
+            Error::Policy => assert!(policy),
+            Error::InvalidTime => assert!(!policy),
+            other => panic!("{other:?}"),
+        }
+    }
+    // The old wire form, without issued_at, never even deserializes.
     let v2 = r#"{"version":2,"purpose":"global-passport-status","scope":"s","epoch":1,"policy_revision":1,"shared_expiry":86400,"issuer_public_key":[]}"#;
     assert!(serde_json::from_str::<Status>(v2).is_err());
 }
