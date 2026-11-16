@@ -2,10 +2,7 @@
 //!
 //! Honest flows (pairing or restore with 50 communities) stay far below the
 //! ceiling; the ceiling itself still applies at STAMP_MAX_PER_DAY.
-use cgbl::{
-    storage::{MemoryStore, Store},
-    *,
-};
+use cgbl::{storage::MemoryStore, *};
 use cpsd::rand::{SeedableRng, rngs::StdRng};
 
 const DAY: u64 = 86_400;

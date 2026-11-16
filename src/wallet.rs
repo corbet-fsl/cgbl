@@ -138,6 +138,7 @@ pub struct EndedChain {
     /// SHA-256 of the ended community's genesis document.
     #[serde(with = "hex32")]
     pub fingerprint: [u8; 32],
+    /// Why the chain ended.
     pub reason_class: EndedReason,
     /// Unix seconds at which it ended.
     pub ended_at: u64,

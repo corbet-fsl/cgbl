@@ -3,10 +3,7 @@
 //!
 //! Each test pins one behaviour of `Global`'s stamp surface that no other
 //! test observes, so weakening the product code turns the test red.
-use cgbl::{
-    storage::{MemoryStore, Store},
-    *,
-};
+use cgbl::{storage::MemoryStore, *};
 use cpsd::rand::{SeedableRng, rngs::StdRng};
 
 const DAY: u64 = 86_400;

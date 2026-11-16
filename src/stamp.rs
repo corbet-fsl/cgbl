@@ -264,10 +264,8 @@ where
         ];
         let read = self.read(keys).await?;
         let state = self.state(&read, now)?;
-        if birth {
-            if let Open::Done(stored) = crate::birth::check(&read, &birth_key, &birth_input)? {
-                return BlindStamp::from_bytes(&stored).map_err(|_| Error::Encoding);
-            }
+        if birth && let Open::Done(stored) = crate::birth::check(&read, &birth_key, &birth_input)? {
+            return BlindStamp::from_bytes(&stored).map_err(|_| Error::Encoding);
         }
         let person: Account = get(&read, &account(subject))?.ok_or(Error::UnknownSubject)?;
         person.eligible()?;

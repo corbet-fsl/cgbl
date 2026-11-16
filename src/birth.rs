@@ -323,7 +323,7 @@ mod tests {
     async fn change_refuses_an_output_one_byte_past_max() {
         // Kills 23:58 `+` -> `*` (the huge bound would accept) and
         // 135:21 `>` -> `==` (MAX+1 != MAX, so the mutant would accept).
-        let store = MemoryStore::new("global").unwrap();
+        let _store = MemoryStore::new("global").unwrap();
         let key = Item::Stamp.key(&subject());
         let input = Item::Stamp.input(&[b"boundary"]);
         assert!(matches!(
