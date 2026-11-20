@@ -5,7 +5,6 @@ const corbetSource = /^git\+https:\/\/git\.corbet\.ch\/corbet-(?:libre|fsl)\//;
 
 const originalOwners = new Map([
   ['cchr', 'https://git.corbet.ch/corbet-libre/cchr'],
-  ['cmbl', 'https://git.corbet.ch/corbet-libre/cmbl.git'],
   ['cmmr', 'https://git.corbet.ch/corbet-libre/cmmr.git'],
 ]);
 
