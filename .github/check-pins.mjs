@@ -3,10 +3,8 @@ import { pathToFileURL } from 'node:url';
 
 const corbetSource = /^git\+https:\/\/git\.corbet\.ch\/corbet-(?:libre|fsl)\//;
 
-const originalOwners = new Map([
-  ['cchr', 'https://git.corbet.ch/corbet-libre/cchr'],
-  ['cmmr', 'https://git.corbet.ch/corbet-libre/cmmr.git'],
-]);
+// Every first-party crate follows main now; no original owner is retained on a v01 branch.
+const originalOwners = new Map([]);
 
 function checkSource(source, resolved, name) {
   const url = new URL(source.slice(4));

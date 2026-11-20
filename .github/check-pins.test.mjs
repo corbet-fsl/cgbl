@@ -49,18 +49,8 @@ test('require the crlt Git dependency', () => {
 });
 
 
-test('retain only exact original cchr/cmmr v01 owners', () => {
-  for (const [name, suffix] of [['cchr', ''], ['cmmr', '.git']]) {
-    const repo = `https://git.corbet.ch/corbet-libre/${name}${suffix}`;
-    const original = `git+${repo}?branch=v01#${revision}`;
-    checkPins(graph(pkg(name, original, [{ name, source: `git+${repo}?branch=v01` }])));
-    for (const invalid of [original.replace('branch=v01', 'branch=main'),
-      original.replace('branch=v01', 'branch=other'),
-      original.replace('branch=v01', 'branch=v01&branch=v01'),
-      original.replace(repo, `${repo}.git`), original.replace(`#${revision}`, '#short')]) {
-      assert.throws(() => checkPins(graph(pkg(name, invalid))), /revision pin/);
-    }
-    assert.throws(() => checkPins(graph(pkg('foreign', original))), /revision pin/);
-    assert.throws(() => checkPins(graph(pkg(name, original), pkg(name, original))), /duplicated/);
-  }
+test('no original v01 owner is retained: a v01 branch is refused', () => {
+  const repo = 'https://git.corbet.ch/corbet-libre/cchr';
+  const original = `git+${repo}?branch=v01#${revision}`;
+  assert.throws(() => checkPins(graph(pkg('cchr', original, [{ name: 'cchr', source: `git+${repo}?branch=v01` }]))), /revision pin/);
 });
